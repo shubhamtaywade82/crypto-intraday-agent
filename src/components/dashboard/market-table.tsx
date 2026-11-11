@@ -1,30 +1,95 @@
 'use client'
 
-// Market watch table: top USDT-M perps with live prices, funding, OI, spread,
-// INR reference and the composite signal badge. Row click selects the chart symbol.
+// Market watch table: live Binance USDT-M perp prices, 24h momentum, funding rates,
+// 15m open interest shifts, cross-exchange CoinDCX spread, and multi-family signal scores.
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
 import type { TickerRow } from '@/lib/engine-types'
 
-const fmtPrice = (n: number) =>
-  n >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 1 }) : n >= 1 ? n.toFixed(3) : n.toPrecision(4)
-const fmtVol = (n: number) => (n >= 1e9 ? (n / 1e9).toFixed(2) + 'B' : (n / 1e6).toFixed(1) + 'M')
+function fmtPrice(val: number): string {
+  if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+  if (val >= 1) return val.toFixed(3)
+  return val.toPrecision(4)
+}
 
-function CompositeBadge({ composite }: { composite: number | null | undefined }) {
-  if (composite === null || composite === undefined) {
-    return <span className="text-xs text-zinc-600">—</span>
+function SignalBadge({ score }: { score: number | null | undefined }) {
+  if (score === null || score === undefined) {
+    return <span className="font-mono text-xs text-zinc-600">—</span>
   }
-  const strong = Math.abs(composite) >= 0.45
-  const cls =
-    composite > 0
-      ? strong ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40' : 'bg-emerald-500/10 text-emerald-500/90 border-emerald-500/20'
-      : strong ? 'bg-red-500/15 text-red-400 border-red-500/40' : 'bg-red-500/10 text-red-500/90 border-red-500/20'
-  const label = composite > 0 ? 'LONG' : 'SHORT'
+  const isLong = score > 0
+  const isHighConf = Math.abs(score) >= 0.45
+  const colorCls = isLong
+    ? isHighConf ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+    : isHighConf ? 'border-rose-500/50 bg-rose-500/15 text-rose-300' : 'border-rose-500/25 bg-rose-500/10 text-rose-400'
+
   return (
-    <Badge variant="outline" className={`${cls} font-mono text-[10px]`}>
-      {label} {Math.abs(composite).toFixed(2)}
+    <Badge variant="outline" className={`inline-flex items-center gap-1 font-mono text-[10px] tabular-nums ${colorCls}`}>
+      {isLong ? <ArrowUpRight className="h-3 w-3" aria-hidden /> : <ArrowDownRight className="h-3 w-3" aria-hidden />}
+      <span>{isLong ? 'LONG' : 'SHORT'}</span>
+      <span className="font-semibold">{Math.abs(score).toFixed(2)}</span>
     </Badge>
+  )
+}
+
+interface RowProps {
+  ticker: TickerRow
+  selected: boolean
+  hasPosition: boolean
+  onSelect: (symbol: string) => void
+}
+
+function TickerItem({ ticker, selected, hasPosition, onSelect }: RowProps) {
+  const isUp = ticker.changePct >= 0
+  const oiUp = (ticker.oiChangePct ?? 0) >= 0
+
+  return (
+    <TableRow
+      onClick={() => onSelect(ticker.symbol)}
+      aria-selected={selected}
+      className={`cursor-pointer border-b border-zinc-800/60 transition-colors duration-150 active:scale-[0.99] ${
+        selected ? 'bg-zinc-900 border-l-2 border-l-emerald-500 text-white' : 'hover:bg-zinc-900/60 text-zinc-300'
+      }`}
+    >
+      <TableCell className="py-2.5 font-mono font-medium">
+        <span className="flex items-center gap-1.5">
+          {hasPosition && <span className="h-2 w-2 rounded-full bg-amber-400 shadow-sm shadow-amber-500/50" title="Active position" />}
+          <span className="text-zinc-100">{ticker.symbol.replace('USDT', '')}</span>
+          <span className="text-[10px] text-zinc-500 font-normal">/USDT</span>
+        </span>
+      </TableCell>
+      <TableCell className="py-2.5 text-right font-mono tabular-nums font-semibold text-zinc-100">
+        ${fmtPrice(ticker.price)}
+      </TableCell>
+      <TableCell className="py-2.5 text-right font-mono tabular-nums">
+        <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${
+          isUp ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+        }`}>
+          {isUp ? '+' : ''}{(ticker.changePct * 100).toFixed(2)}%
+        </span>
+      </TableCell>
+      <TableCell className={`hidden sm:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
+        ticker.fundingRate > 0 ? 'text-zinc-400' : 'text-amber-400 font-semibold'
+      }`}>
+        {(ticker.fundingRate * 100).toFixed(4)}%
+      </TableCell>
+      <TableCell className={`hidden md:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
+        oiUp ? 'text-emerald-400/90' : 'text-rose-400/90'
+      }`}>
+        {ticker.oiChangePct === null ? '—' : `${oiUp ? '+' : ''}${ticker.oiChangePct.toFixed(2)}%`}
+      </TableCell>
+      <TableCell className="hidden lg:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
+        {ticker.spreadPct === null ? <span className="text-zinc-600">n/a</span> : `${ticker.spreadPct >= 0 ? '+' : ''}${ticker.spreadPct.toFixed(2)}%`}
+      </TableCell>
+      <TableCell className="hidden lg:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
+        {ticker.inrPrice === null ? '—' : `₹${fmtPrice(ticker.inrPrice)}`}
+        {ticker.inrSource === 'derived' && <span className="ml-0.5 text-[9px] text-zinc-500" title="Derived via USDT/INR reference rate">*</span>}
+      </TableCell>
+      <TableCell className="py-2.5 text-right">
+        <SignalBadge score={ticker.signals?.composite} />
+      </TableCell>
+    </TableRow>
   )
 }
 
@@ -39,78 +104,36 @@ export function MarketTable({ rows, selected, onSelect, positionSymbols }: Props
   return (
     <div className="max-h-[420px] overflow-y-auto">
       <Table>
-        <TableHeader className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur">
-          <TableRow className="hover:bg-transparent border-zinc-800">
-            <TableHead className="text-zinc-400 font-medium">Symbol</TableHead>
-            <TableHead className="text-right text-zinc-400 font-medium">Price</TableHead>
-            <TableHead className="text-right text-zinc-400 font-medium">24h</TableHead>
-            <TableHead className="hidden sm:table-cell text-right text-zinc-400 font-medium">Funding</TableHead>
-            <TableHead className="hidden md:table-cell text-right text-zinc-400 font-medium">OI 15m</TableHead>
-            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium">CDCX Δ</TableHead>
-            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium">INR ref</TableHead>
-            <TableHead className="text-right text-zinc-400 font-medium">Signal</TableHead>
+        <TableHeader className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
+          <TableRow className="hover:bg-transparent border-zinc-800 text-[11px] uppercase tracking-wider">
+            <TableHead className="text-zinc-400 font-medium py-2">Symbol</TableHead>
+            <TableHead className="text-right text-zinc-400 font-medium py-2">Price</TableHead>
+            <TableHead className="text-right text-zinc-400 font-medium py-2">24h</TableHead>
+            <TableHead className="hidden sm:table-cell text-right text-zinc-400 font-medium py-2">Funding</TableHead>
+            <TableHead className="hidden md:table-cell text-right text-zinc-400 font-medium py-2">OI 15m</TableHead>
+            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium py-2">CDCX Δ</TableHead>
+            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium py-2">INR ref</TableHead>
+            <TableHead className="text-right text-zinc-400 font-medium py-2">Signal</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.length === 0 && (
+          {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-zinc-500 py-8 text-sm">
-                waiting for market data…
+              <TableCell colSpan={8} className="py-8 text-center text-sm text-zinc-500 font-mono">
+                connecting to live market feed…
               </TableCell>
             </TableRow>
+          ) : (
+            rows.map((ticker) => (
+              <TickerItem
+                key={ticker.symbol}
+                ticker={ticker}
+                selected={ticker.symbol === selected}
+                hasPosition={positionSymbols.has(ticker.symbol)}
+                onSelect={onSelect}
+              />
+            ))
           )}
-          {rows.map((t) => {
-            const isSel = t.symbol === selected
-            return (
-              <TableRow
-                key={t.symbol}
-                onClick={() => onSelect(t.symbol)}
-                className={`cursor-pointer border-zinc-800/70 transition-colors ${
-                  isSel ? 'bg-zinc-900' : 'hover:bg-zinc-900/60'
-                }`}
-                aria-selected={isSel}
-              >
-                <TableCell className="font-mono font-medium text-zinc-100">
-                  <span className="flex items-center gap-1.5">
-                    {positionSymbols.has(t.symbol) && (
-                      <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" aria-label="open position" />
-                    )}
-                    {t.symbol.replace('USDT', '')}
-                    <span className="text-[10px] text-zinc-600">/USDT</span>
-                  </span>
-                </TableCell>
-                <TableCell className="text-right font-mono text-zinc-100">{fmtPrice(t.price)}</TableCell>
-                <TableCell className={`text-right font-mono ${t.changePct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {t.changePct >= 0 ? '+' : ''}
-                  {(t.changePct * 100).toFixed(2)}%
-                </TableCell>
-                <TableCell className={`hidden sm:table-cell text-right font-mono text-xs ${
-                  t.fundingRate > 0 ? 'text-emerald-500/80' : 'text-red-500/80'
-                }`}>
-                  {(t.fundingRate * 100).toFixed(4)}%
-                </TableCell>
-                <TableCell className={`hidden md:table-cell text-right font-mono text-xs ${
-                  (t.oiChangePct ?? 0) >= 0 ? 'text-emerald-500/80' : 'text-red-500/80'
-                }`}>
-                  {t.oiChangePct === null ? '—' : `${t.oiChangePct >= 0 ? '+' : ''}${t.oiChangePct.toFixed(2)}%`}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-right font-mono text-xs text-zinc-400">
-                  {t.spreadPct === null ? (
-                    <span className="text-zinc-600" title="CoinDCX unreachable — see status pill">n/a</span>
-                  ) : (
-                    `${t.spreadPct >= 0 ? '+' : ''}${t.spreadPct.toFixed(2)}%`
-                  )}
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-right font-mono text-xs text-zinc-400">
-                  {t.inrPrice === null ? '—' : `₹${fmtPrice(t.inrPrice)}`}
-                  {t.inrSource === 'derived' && <span className="ml-1 text-[9px] text-zinc-600">*</span>}
-                </TableCell>
-                <TableCell className="text-right">
-                  <CompositeBadge composite={t.signals?.composite} />
-                </TableCell>
-              </TableRow>
-            )
-          })}
         </TableBody>
       </Table>
     </div>

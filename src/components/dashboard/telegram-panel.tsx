@@ -176,7 +176,7 @@ export function TelegramPanel({ config }: { config: TelegramSafeConfig | undefin
         variant="outline"
         onClick={testSend}
         disabled={testing || !hasToken || !chatId}
-        className="h-8 w-full border-zinc-700 text-[11px] text-zinc-200 hover:bg-zinc-800 hover:text-emerald-300"
+        className="h-8 w-full border-zinc-700 text-[11px] text-zinc-200 transition-transform duration-150 active:scale-[0.98] hover:bg-zinc-800 hover:text-emerald-300"
       >
         <Send className="mr-1.5 h-3 w-3" aria-hidden />
         {testing ? 'Sending…' : 'Send test message'}

@@ -53,6 +53,7 @@ export class TradingEngine {
   private reviewCounter = 0
   private lastHaltReason: string | null = null
   private tgWired = false
+  private isScanning = false
 
   // ── lifecycle ────────────────────────────────────────────────────────────
   async start() {
@@ -324,6 +325,11 @@ export class TradingEngine {
 
   // ── the agent cycle ──────────────────────────────────────────────────────
   async agentCycle(): Promise<{ cycle: number; candidates: number; verdicts: AgentVerdict[]; source: string }> {
+    if (this.isScanning) {
+      log('info', 'SCAN', 'scan pass already active — skipping overlap')
+      return { cycle: this.status.cycle, candidates: 0, verdicts: [], source: 'skipped' }
+    }
+    this.isScanning = true
     const cycle = ++this.status.cycle
     this.status.lastScanTs = Date.now()
     this.status.nextScanTs = Date.now() + CONFIG.scanIntervalSec * 1_000
@@ -453,6 +459,8 @@ export class TradingEngine {
     } catch (e: any) {
       log('error', 'SCAN', `cycle ${cycle} failed: ${String(e?.message || e).slice(0, 160)}`)
       return { cycle, candidates: 0, verdicts: [], source: 'error' }
+    } finally {
+      this.isScanning = false
     }
   }
 

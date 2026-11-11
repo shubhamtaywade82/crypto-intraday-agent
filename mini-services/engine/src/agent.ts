@@ -1,10 +1,9 @@
 // ─── Agentic AI confluence layer — the "crypto-trading-agent" brain ─────────
 // Every agent cycle: quant signals per symbol → pre-filter by |composite| →
-// one structured LLM call (z-ai-web-dev-sdk, backend-only) weighing all four
+// one structured LLM call (local Ollama minicpm5:2b) weighing all four
 // strategy families → strict-JSON decision → risk-gated execution.
 // LLM outages degrade gracefully to the rule-based composite score.
 
-import ZAI from 'z-ai-web-dev-sdk'
 import { CONFIG } from './config'
 import { log, recordDecision } from './store'
 import type { LlmDecision, SignalSet, TickerRow } from './types'
@@ -133,7 +132,7 @@ async function callOllama(messages: Array<{ role: string; content: string }>): P
       stream: false,
       options: { temperature: 0.2 },
     }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(60_000),
   })
   if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
   const data = (await res.json()) as { message?: { content?: string } }
@@ -143,22 +142,7 @@ async function callOllama(messages: Array<{ role: string; content: string }>): P
 }
 
 async function callLlm(messages: Array<{ role: string; content: string }>): Promise<string> {
-  try {
-    return await callOllama(messages)
-  } catch (ollamaErr: any) {
-    try {
-      const zai = await ZAI.create()
-      const completion = await zai.chat.completions.create({
-        messages,
-        thinking: { type: 'disabled' },
-      })
-      const text = completion.choices[0]?.message?.content
-      if (text) return text
-    } catch {
-      // Ignore ZAI failure and rethrow primary Ollama error
-    }
-    throw ollamaErr
-  }
+  return await callOllama(messages)
 }
 
 export async function weighCandidates(
@@ -181,7 +165,7 @@ export async function weighCandidates(
       .join(' | ') || 'no actionable setups'
     return { verdicts, source: 'llm', summary }
   } catch (e: any) {
-    log('warn', 'AGENT', `LLM unavailable (${String(e?.message || e).slice(0, 120)}) — falling back to rule-based composite`)
+    log('warn', 'AGENT', `Ollama ${CONFIG.ollamaModel} unavailable (${String(e?.message || e).slice(0, 80)}) — falling back to rule-based composite`)
     const verdicts = rulesFallbackVerdicts(candidates)
     const summary = verdicts
       .filter((v) => v.action !== 'HOLD')

@@ -9,6 +9,8 @@
     "start": "bun index.ts"
   },
   "dependencies": {
+    "@nemesis-oss/binance-sdk": "^3.5.1",
+    "@nemesis-oss/coindcx-sdk": "^1.3.0",
     "@nemesis-oss/tg-format": "^0.1.0"
   }
 }
