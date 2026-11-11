@@ -52,3 +52,13 @@ prompt
 server.log
 # Skills directory
 /skills/
+# ── runtime state & secrets (never commit) ──────────────────────────────────
+upload/
+tool-results/
+.env
+.zscripts/dev.pid
+/db/
+/data/
+mini-services/engine/data/
+.agents/
+skills-lock.json
