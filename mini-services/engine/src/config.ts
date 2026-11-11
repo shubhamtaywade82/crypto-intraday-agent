@@ -1,7 +1,7 @@
 // ─── Engine configuration & risk limits ─────────────────────────────────────
 
 export const CONFIG = {
-  port: 3001,
+  port: Number(process.env.ENGINE_PORT || process.env.PORT || 3005),
 
   // Paper account
   initialEquity: 10_000,        // USDT virtual capital

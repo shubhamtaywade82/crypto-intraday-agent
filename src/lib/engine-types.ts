@@ -152,4 +152,7 @@ export interface Candle {
   closed: boolean
 }
 
-export const ENGINE_REST = (path: string) => `${path}${path.includes('?') ? '&' : '?'}XTransformPort=3001`
+export const ENGINE_REST = (path: string) => {
+  const port = process.env.NEXT_PUBLIC_ENGINE_PORT || '3005'
+  return `${path}${path.includes('?') ? '&' : '?'}XTransformPort=${port}`
+}

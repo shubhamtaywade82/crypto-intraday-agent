@@ -115,7 +115,11 @@ export default function Dashboard() {
 
   // ── realtime wiring ──────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = io('/?XTransformPort=3002', {
+    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3006'
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    const wsUrl = isLocalhost ? `http://${window.location.hostname}:${wsPort}` : `/?XTransformPort=${wsPort}`
+    const socket = io(wsUrl, {
+      path: '/',
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 20,

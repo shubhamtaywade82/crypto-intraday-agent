@@ -21,7 +21,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-const ENGINE_URL = process.env.ENGINE_URL || 'http://localhost:3001'
+const ENGINE_URL = process.env.ENGINE_URL || 'http://localhost:3005'
 
 async function engineFetch(path: string, init?: RequestInit): Promise<any> {
   const res = await fetch(`${ENGINE_URL}${path}`, {

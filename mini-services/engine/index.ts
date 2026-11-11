@@ -12,7 +12,7 @@ import { log, bus, clearPersisted } from './src/store'
 import * as tg from './src/telegram'
 
 const engine = new TradingEngine()
-const WS_PORT = 3002
+const WS_PORT = Number(process.env.ENGINE_WS_PORT || process.env.WS_PORT || 3006)
 
 const httpServer = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost')

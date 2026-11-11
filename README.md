@@ -17,7 +17,7 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 
 ```
                         ┌────────────────────────────────────────────────┐
-                        │   ENGINE  (mini-services/engine, bun :3001)    │
+                        │   ENGINE  (mini-services/engine, bun :3005)    │
                         │                                                │
   wss://fstream.binance.com/market/stream                ┌──────────┐   │
    ├─ !ticker@arr (universe ranking)          ┌─────────▶│ Paper    │   │
@@ -34,12 +34,12 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
                                             │          └──────────┘   │
   z-ai-web-dev-sdk (LLM confluence) ────────┘                          │
                         │                    │                          │
-              REST :3001 /engine/*     socket.io :3002 (path /)        │
+              REST :3005 /engine/*     socket.io :3006 (path /)        │
                         │                    │                          │
         ┌───────────────┴─────────┐   ┌──────┴───────────┐              │
         │  CLI  cli/agent-cli.ts  │   │  Next.js 16 UI   │              │
-        │  status/scan/open/close │   │  (via Caddy      │              │
-        └─────────────────────────┘   │  XTransformPort) │              │
+        │  status/scan/open/close │   │  (direct proxy   │              │
+        └─────────────────────────┘   │  or via Caddy)   │              │
                                         └─────────────────┘              │
         ┌─────────────────────────┐                                     │
         │  MCP  mcp-server/       │  stdio → any MCP host               │
@@ -68,11 +68,13 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 ## Run it
 
 ```bash
-# 1) engine (REST :3001 + socket.io :3002)
+# 1) engine (REST :3005 + socket.io :3006)
 cd mini-services/engine && bun run dev
+# or from root:
+bun run dev:engine
 
 # 2) web dashboard (Next.js :3000 — the preview panel)
-bun run dev          # already running in this workspace
+bun run dev
 
 # 3) CLI
 bun cli/agent-cli.ts status
@@ -99,7 +101,7 @@ Claude Desktop registration (`claude_desktop_config.json`):
     "crypto-intraday-agent": {
       "command": "bun",
       "args": ["/absolute/path/to/mcp-server/index.ts"],
-      "env": { "ENGINE_URL": "http://localhost:3001" }
+      "env": { "ENGINE_URL": "http://localhost:3005" }
     }
   }
 }
