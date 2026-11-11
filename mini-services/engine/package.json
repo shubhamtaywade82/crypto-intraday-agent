@@ -1,0 +1,10 @@
+{
+  "name": "crypto-intraday-engine",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Crypto futures intraday trading engine: Binance WS data, CoinDCX spread scanner, agentic AI (paper mode)",
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts"
+  }
+}
