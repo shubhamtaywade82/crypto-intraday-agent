@@ -9,6 +9,9 @@
 //   bun cli/agent-cli.ts open BTCUSDT LONG [qty]
 //   bun cli/agent-cli.ts close BTCUSDT
 //   bun cli/agent-cli.ts reset
+//   bun cli/agent-cli.ts tg-status | tg-on | tg-off
+//   bun cli/agent-cli.ts tg-set <chatId> <botToken>
+//   bun cli/agent-cli.ts tg-test [message]
 
 const BASE = process.env.ENGINE_URL || 'http://localhost:3001'
 
@@ -27,6 +30,21 @@ async function api(path: string, method = 'GET'): Promise<any> {
     return await res.json()
   } catch (e: any) {
     console.error(`${c(RED, 'engine unreachable')} — is it running? (bun run dev in mini-services/engine)\n${e?.message || e}`)
+    process.exit(1)
+  }
+}
+
+async function apiPost(path: string, body?: unknown): Promise<any> {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
+    })
+    return await res.json()
+  } catch (e: any) {
+    console.error(`${c(RED, 'engine unreachable')} — ${e?.message || e}`)
     process.exit(1)
   }
 }
@@ -159,6 +177,41 @@ switch (cmd) {
     break
   }
 
+  // ── Telegram notifier ────────────────────────────────────────────────────
+  case 'tg-status': {
+    const t = await api('/engine/telegram/config')
+    box('TELEGRAM NOTIFIER', [
+      `enabled     : ${t.enabled ? c(GREEN, 'ON') : c(YELLOW, 'OFF')}`,
+      `bot token   : ${t.hasToken ? c(GREEN, t.tokenMasked) : c(DIM, '(not set)')}`,
+      `chat id     : ${t.chatId || c(DIM, '(not set)')}`,
+      `min interval: ${t.minIntervalMs}ms`,
+      `events      : ${Object.entries(t.events as Record<string, boolean>).filter(([, v]) => v).map(([k]) => k).join(', ') || c(DIM, 'none')}`,
+    ])
+    break
+  }
+  case 'tg-set': {
+    if (!arg1 || !arg2) { console.error('usage: tg-set <chatId> <botToken>'); process.exit(1) }
+    const r = await apiPost('/engine/telegram/config', { chatId: arg1, botToken: arg2, enabled: true })
+    console.log(r.ok ? c(GREEN, `✓ telegram configured — chat ${arg1}`) : c(RED, `✗ ${r.error || 'failed'}`))
+    break
+  }
+  case 'tg-on': {
+    const r = await apiPost('/engine/telegram/config', { enabled: true })
+    console.log(r.ok ? c(GREEN, '✓ telegram notifications enabled') : c(RED, `✗ ${r.error || 'failed'}`))
+    break
+  }
+  case 'tg-off': {
+    const r = await apiPost('/engine/telegram/config', { enabled: false })
+    console.log(r.ok ? c(YELLOW, '⏸ telegram notifications disabled') : c(RED, `✗ ${r.error || 'failed'}`))
+    break
+  }
+  case 'tg-test': {
+    const msg = arg1 || undefined
+    const r = await apiPost('/engine/telegram/test', msg ? { message: msg } : {})
+    console.log(r.ok ? c(GREEN, `✓ ${r.detail}`) : c(RED, `✗ ${r.detail || r.error || 'failed'}`))
+    break
+  }
+
   default:
     console.log(`crypto intraday agent CLI — engine at ${BASE}
 
@@ -173,5 +226,11 @@ commands:
   spreads       Binance vs CoinDCX spread scanner
   open SYM LONG|SHORT [qty]   manual paper order
   close SYM     close a position
-  reset         reset paper account to 10,000 USDT`)
+  reset         reset paper account to 10,000 USDT
+
+telegram notifier (powered by @nemesis-oss/tg-format):
+  tg-status                show current telegram config (token masked)
+  tg-set <chatId> <token>  configure chat + bot token, enable notifications
+  tg-on | tg-off           toggle the notifier
+  tg-test [message]        send a test message (verifies bot token + chat id)`)
 }

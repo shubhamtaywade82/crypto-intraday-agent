@@ -19,6 +19,8 @@ import PriceChart from '@/components/dashboard/price-chart'
 import AgentFeed from '@/components/dashboard/agent-feed'
 import PositionsPanel from '@/components/dashboard/positions-panel'
 import { RiskPanel, DecisionJournal } from '@/components/dashboard/risk-panel'
+import { TelegramPanel } from '@/components/dashboard/telegram-panel'
+import { Send } from 'lucide-react'
 import {
   ENGINE_REST,
   type AccountSnapshot,
@@ -30,6 +32,7 @@ import {
   type RiskSnapshot,
   type Snapshot,
   type TickerRow,
+  type TelegramSafeConfig,
 } from '@/lib/engine-types'
 
 const EMPTY_ACCOUNT: AccountSnapshot = {
@@ -82,6 +85,7 @@ export default function Dashboard() {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [decisions, setDecisions] = useState<LlmDecision[]>([])
   const [trades, setTrades] = useState<ClosedTrade[]>([])
+  const [telegram, setTelegram] = useState<TelegramSafeConfig | undefined>(undefined)
   const [selected, setSelected] = useState('BTCUSDT')
   const [tf, setTf] = useState<'15m' | '5m'>('15m')
   const [candles, setCandles] = useState<Candle[]>([])
@@ -130,8 +134,16 @@ export default function Dashboard() {
       if (snap.risk) setRisk(snap.risk)
       if (Array.isArray(snap.logs)) setLogs(snap.logs)
       if (Array.isArray(snap.decisions)) setDecisions(snap.decisions)
+      if (snap.telegram) setTelegram(snap.telegram)
     })
     socket.on('status', (st: EngineStatus) => setStatus(st))
+    // when the engine nudges clients after a telegram config update, refresh it
+    socket.on('status', async () => {
+      try {
+        const t = await fetch(ENGINE_REST('/engine/telegram/config')).then((r) => r.json())
+        if (t) setTelegram(t)
+      } catch { /* ignore */ }
+    })
     socket.on('tickers', (rows: TickerRow[]) => {
       if (Array.isArray(rows) && rows.length) setTickers(rows)
     })
@@ -162,6 +174,7 @@ export default function Dashboard() {
         if (snap.risk) setRisk(snap.risk)
         if (Array.isArray(snap.logs)) setLogs(snap.logs)
         if (Array.isArray(snap.decisions)) setDecisions(snap.decisions)
+        if (snap.telegram) setTelegram(snap.telegram)
       } catch {
         toast({ title: 'Engine offline', description: 'Start it with: bun run dev inside mini-services/engine', variant: 'destructive' })
       }
@@ -410,6 +423,19 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="p-3">
                 <DecisionJournal decisions={decisions} />
+              </CardContent>
+            </Card>
+
+            <Card className="border-zinc-800 bg-zinc-950/70 py-0 gap-0">
+              <CardHeader className="border-b border-zinc-800/70 py-3">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
+                  <Send className="h-4 w-4 text-sky-400" aria-hidden />
+                  Telegram alerts
+                  <span className="ml-auto text-[10px] font-mono text-zinc-600">@nemesis-oss/tg-format</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                <TelegramPanel config={telegram} />
               </CardContent>
             </Card>
           </div>

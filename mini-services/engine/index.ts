@@ -9,6 +9,7 @@ import { Server } from 'socket.io'
 import { CONFIG } from './src/config'
 import { TradingEngine } from './src/engine'
 import { log, bus, clearPersisted } from './src/store'
+import * as tg from './src/telegram'
 
 const engine = new TradingEngine()
 const WS_PORT = 3002
@@ -63,6 +64,7 @@ const httpServer = createServer(async (req, res) => {
         engine.status.nextScanTs = Date.now() + 1_000
         log('info', 'ENGINE', 'agent loop started by user')
         bus.emit('status', engine.status)
+        tg.notifyAgentStart()
       }
       return json(200, { ok: true, running: true })
     }
@@ -116,6 +118,35 @@ const httpServer = createServer(async (req, res) => {
         }
       })
       return json(200, { source: engine.status.coindcx, rows })
+    }
+
+    // ── Telegram notifier config + test ──────────────────────────────────────
+    if (p === '/engine/telegram/config' && req.method === 'GET') {
+      return json(200, tg.getSafeConfig())
+    }
+    if (p === '/engine/telegram/config' && req.method === 'POST') {
+      const body = await readBody()
+      const patch: any = {}
+      if (typeof body.enabled === 'boolean') patch.enabled = body.enabled
+      if (typeof body.botToken === 'string') patch.botToken = body.botToken.trim()
+      if (typeof body.chatId === 'string') patch.chatId = String(body.chatId).trim()
+      if (typeof body.minIntervalMs === 'number' && body.minIntervalMs >= 500 && body.minIntervalMs <= 60_000) patch.minIntervalMs = body.minIntervalMs
+      if (body.events && typeof body.events === 'object') {
+        const current = tg.getConfig().events
+        const next: Record<string, boolean> = { ...current }
+        for (const k of Object.keys(current)) {
+          if (typeof body.events[k] === 'boolean') next[k] = body.events[k]
+        }
+        patch.events = next as any
+      }
+      const cfg = tg.updateConfig(patch)
+      bus.emit('status', engine.status) // nudge clients to refresh snapshot
+      return json(200, { ok: true, config: { ...cfg, botToken: undefined } })
+    }
+    if (p === '/engine/telegram/test' && req.method === 'POST') {
+      const body = await readBody().catch(() => ({}))
+      const r = await tg.notifyTest(typeof body?.message === 'string' ? body.message : undefined)
+      return json(r.ok ? 200 : 400, r)
     }
 
     return json(404, { error: `unknown route ${p}` })

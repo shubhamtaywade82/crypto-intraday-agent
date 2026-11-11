@@ -8,7 +8,8 @@ import { PaperEngine } from './paper'
 import { RiskManager } from './risk'
 import { weighCandidates, journal, reviewPosition, type Candidate, type AgentVerdict } from './agent'
 import { log, bus, recentLogs, recentDecisions } from './store'
-import type { Candle, EngineStatus, TickerRow } from './types'
+import * as tg from './telegram'
+import type { Candle, EngineStatus, TickerRow, ClosedTrade, Position } from './types'
 
 export class TradingEngine {
   paper = new PaperEngine()
@@ -50,11 +51,14 @@ export class TradingEngine {
   private tickerFlushTimer: any = null
   private lastTickerEmit = 0
   private reviewCounter = 0
+  private lastHaltReason: string | null = null
+  private tgWired = false
 
   // ── lifecycle ────────────────────────────────────────────────────────────
   async start() {
     log('info', 'ENGINE', 'starting intraday engine (paper mode)…')
     this.risk.newDay(this.paper.account.balance)
+    this.wireTelegram()
     dcx.refreshFx().then(() => { this.status.usdtInr = dcx.fx().usdtInr; this.status.usdtInrSource = dcx.fx().usdtInrSource })
 
     this.ws = new BinanceWs({
@@ -110,8 +114,15 @@ export class TradingEngine {
       this.paper.pushEquityPoint()
       const { halted, reason } = this.risk.refresh(this.paper.account.equity)
       if (halted && reason && this.paper.account.positions.length === 0) {
-        // log halt once
-        if ((this as any)._haltLogged !== reason) { log('warn', 'RISK', reason); (this as any)._haltLogged = reason }
+        // log + telegram halt once per reason
+        if (this.lastHaltReason !== reason) {
+          log('warn', 'RISK', reason)
+          tg.notifyRiskHalt(reason, this.risk.state.dailyPnl, this.risk.state.dailyStartEquity)
+          this.lastHaltReason = reason
+        }
+      } else if (this.lastHaltReason && !halted) {
+        // recovered — clear so a future halt can notify again
+        this.lastHaltReason = null
       }
       bus.emit('account', this.accountSnapshot())
     }, 5_000)
@@ -131,6 +142,12 @@ export class TradingEngine {
     setTimeout(() => this.agentCycle(), 5_000) // first cycle soon after boot
     log('info', 'ENGINE', `engine live — agent loop every ${CONFIG.scanIntervalSec}s, universe [${this.symbols.join(', ')}]`)
     bus.emit('status', this.status)
+    tg.notifyBoot({
+      cycle: this.status.cycle,
+      symbols: this.symbols,
+      scanIntervalSec: CONFIG.scanIntervalSec,
+      equity: this.paper.account.equity,
+    })
   }
 
   stop() {
@@ -140,6 +157,23 @@ export class TradingEngine {
     this.status.nextScanTs = null
     log('info', 'ENGINE', 'agent loop stopped by user')
     bus.emit('status', this.status)
+    tg.notifyAgentStop()
+  }
+
+  /** Subscribe to bus events that drive Telegram notifications. Idempotent. */
+  private wireTelegram() {
+    if (this.tgWired) return
+    this.tgWired = true
+    bus.on('position:opened', (pos: Position) => tg.notifyEntry({
+      symbol: pos.symbol, side: pos.side, qty: pos.qty, entry: pos.entry,
+      stop: pos.stop, takeProfit: pos.takeProfit, confidence: pos.confidence,
+      rationale: pos.rationale, strategy: pos.strategy, riskUsd: pos.riskUsd,
+    }))
+    bus.on('position:closed', (t: ClosedTrade) => tg.notifyExit({
+      symbol: t.symbol, side: t.side, entry: t.entry, exit: t.exit, qty: t.qty,
+      pnl: t.pnl, fees: t.fees, closeReason: t.closeReason, strategy: t.strategy,
+      openedAt: t.openedAt, closedAt: t.closedAt, rationale: t.rationale,
+    }))
   }
 
   // ── universe & history ───────────────────────────────────────────────────
@@ -406,6 +440,15 @@ export class TradingEngine {
         summary,
       })
       bus.emit('account', this.accountSnapshot())
+      // telegram scan digest (only when something actually executed — avoids spam on HOLD cycles)
+      if (executed.length) {
+        tg.notifyScanDigest({
+          cycle, source,
+          candidates: candidates.length,
+          executed, skipped,
+          summary: summary || 'no actionable setups',
+        })
+      }
       return { cycle, candidates: candidates.length, verdicts, source }
     } catch (e: any) {
       log('error', 'SCAN', `cycle ${cycle} failed: ${String(e?.message || e).slice(0, 160)}`)
@@ -471,6 +514,7 @@ export class TradingEngine {
           .filter(([, until]) => until > Date.now())
           .map(([sym, until]) => ({ symbol: sym, minutesLeft: Math.ceil((until - Date.now()) / 60_000) })),
       },
+      telegram: tg.getSafeConfig(),
     }
   }
 }

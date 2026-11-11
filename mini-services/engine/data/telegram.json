@@ -1,0 +1,14 @@
+{
+  "enabled": false,
+  "botToken": "",
+  "chatId": "",
+  "events": {
+    "boot": true,
+    "agent": true,
+    "entry": true,
+    "exit": true,
+    "risk_halt": true,
+    "scan_digest": true
+  },
+  "minIntervalMs": 1500
+}

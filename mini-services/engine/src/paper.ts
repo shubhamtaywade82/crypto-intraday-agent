@@ -91,6 +91,7 @@ export class PaperEngine {
     this.account.positions.push(pos)
     log('trade', 'FILL', `OPEN ${opts.side} ${opts.symbol} qty=${opts.qty} @ ${fill.toFixed(4)} | SL ${opts.stop.toFixed(4)} TP ${opts.takeProfit.toFixed(4)} | fee ${fee.toFixed(3)} | ${opts.strategy} conf ${(opts.confidence * 100).toFixed(0)}%`)
     bus.emit('positions', this.account.positions)
+    bus.emit('position:opened', pos)
     persistAccount(this.account)
     return pos
   }
@@ -125,6 +126,7 @@ export class PaperEngine {
     log('trade', 'FILL', `CLOSE ${p.side} ${p.symbol} @ ${fill.toFixed(4)} → ${reason} | PnL ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`)
     bus.emit('positions', this.account.positions)
     bus.emit('trades', trade)
+    bus.emit('position:closed', trade)
     persistAccount(this.account)
     return trade
   }

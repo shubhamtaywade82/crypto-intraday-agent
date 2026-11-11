@@ -5,7 +5,8 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 - **Binance USDⓈ-M futures** market data + trading semantics — from the official `binance/binance-skills-hub` skill family (`derivatives-trading-usds-futures`, market-data, paper-trading, algo-trading, `binance-usdm-futures-tools` for the MCP/tool layer)
 - **CoinDCX** public market data — per the `ccxt/ccxt@ccxt-python` skill (same public endpoints CCXT's coindcx adapter wraps; implemented natively in TypeScript here)
 - **Agentic AI** — a crypto-trading-agent decision core powered by `z-ai-web-dev-sdk` (LLM confluence + position supervision)
-- **MCP server** — the engine is exposed as 12 MCP tools for any MCP host (Claude Desktop, Cursor, Claude Code)
+- **Telegram alerts** — `@nemesis-oss/tg-format` for type-safe message entities (entries, exits, risk halts, agent start/stop, scan digests)
+- **MCP server** — the engine is exposed as 15 MCP tools for any MCP host (Claude Desktop, Cursor, Claude Code)
 - **Web + CLI** — one shared engine, two frontends
 
 > ⚠️ **Paper mode only.** All fills are simulated at live Binance prices (0.05% taker fee + 0.02% slippage). No API keys are needed or used.
@@ -80,6 +81,12 @@ bun cli/agent-cli.ts open BTCUSDT LONG 0.01
 bun cli/agent-cli.ts close BTCUSDT
 bun cli/agent-cli.ts spreads         # cross-exchange scanner
 
+# 3b) Telegram notifier (powered by @nemesis-oss/tg-format)
+bun cli/agent-cli.ts tg-set <chatId> <botToken>   # configure + enable
+bun cli/agent-cli.ts tg-test                       # send a test message
+bun cli/agent-cli.ts tg-on | tg-off                # toggle
+bun cli/agent-cli.ts tg-status                    # show config (token masked)
+
 # 4) MCP server (stdio — for Claude Desktop / Cursor / Claude Code)
 bun mcp-server/index.ts
 ```
@@ -98,7 +105,54 @@ Claude Desktop registration (`claude_desktop_config.json`):
 }
 ```
 
-MCP tools: `engine_status`, `market_snapshot`, `spread_scan`, `open_positions`, `trade_history`, `agent_decisions`, `run_scan`, `agent_start`, `agent_stop`, `place_paper_order`, `close_position`, `reset_paper_account`.
+MCP tools: `engine_status`, `market_snapshot`, `spread_scan`, `open_positions`, `trade_history`, `agent_decisions`, `run_scan`, `agent_start`, `agent_stop`, `place_paper_order`, `close_position`, `reset_paper_account`, **`telegram_status`**, **`telegram_configure`**, **`telegram_test`**.
+
+## Telegram notifications
+
+Realtime alerts on your phone / chat powered by [`@nemesis-oss/tg-format`](https://www.npmjs.com/package/@nemesis-oss/tg-format) — a type-safe formatter that emits **native `MessageEntity[]`** (no `parse_mode`, no escaping bugs, correct UTF-16 offsets even with emoji and ZWJ sequences). One `FormattedMessage` tree → native entities for `sendMessage`.
+
+### Setup
+
+1. Create a bot with [@BotFather](https://t.me/BotFather) → copy the bot token
+2. Get your chat id from [@userinfobot](https://t.me/userinfobot) (or invite the bot to a group and use the group's negative id)
+3. Configure the engine (any of these is equivalent):
+   ```bash
+   # CLI
+   bun cli/agent-cli.ts tg-set 123456789 "123456789:ABCdefGhiJklMnoPqrStu"
+   # …or via env on first boot
+   TELEGRAM_BOT_TOKEN="123456789:ABCdef…" TELEGRAM_CHAT_ID=123456789 bun run dev
+   # …or in the dashboard → “Telegram alerts” card
+   ```
+4. Verify with `bun cli/agent-cli.ts tg-test` (or the dashboard "Send test message" button)
+
+### Events you can subscribe to
+
+| Event | Default | What triggers it |
+|---|---|---|
+| `boot` | on | Engine startup with universe + equity snapshot |
+| `agent` | on | Agent loop started / stopped |
+| `entry` | on | New position opened (auto or manual) with side, qty, entry, SL, TP, R:R, confidence, strategy, LLM thesis |
+| `exit` | on | Position closed with PnL %, fees, hold time, exit reason (🎯 TP / 🛑 SL / ⏰ EOD / ✋ manual / 🤖 agent-exit) |
+| `risk_halt` | on | Daily-loss cutoff (-3%) hit — new entries blocked until UTC midnight or recovery |
+| `scan_digest` | **off** | Each cycle that executes a trade (chatty — opt-in only) |
+
+All events use a 1.5-second-per-chat rate limit (Telegram's hard limit is 1/sec/chat). Failures never throw into the engine — they log to the agent feed and continue.
+
+### Configure at runtime
+
+The config persists to `mini-services/engine/data/telegram.json` (gitignored). Read it back with:
+
+```bash
+bun cli/agent-cli.ts tg-status
+```
+
+or in the dashboard (token is always masked when read back).
+
+```bash
+# MCP
+{ "tool": "telegram_configure", "arguments": { "botToken": "…", "chatId": "…", "enabled": true, "events": { "scan_digest": true } } }
+{ "tool": "telegram_test", "arguments": { "message": "hello from claude" } }
+```
 
 ## Data-source behaviour (be aware)
 
@@ -114,11 +168,11 @@ MCP tools: `engine_status`, `market_snapshot`, `spread_scan`, `open_positions`, 
 
 ```
 mini-services/engine/     trading engine (bun): binance.ts, coindcx.ts, indicators.ts,
-                          strategies.ts, paper.ts, risk.ts, agent.ts, engine.ts, index.ts
+                          strategies.ts, paper.ts, risk.ts, agent.ts, telegram.ts, engine.ts, index.ts
 mcp-server/               stdio MCP server → engine REST
 cli/agent-cli.ts          headless CLI
 src/app/page.tsx          dashboard (single / route)
-src/components/dashboard/ price-chart, market-table, agent-feed, positions-panel, risk-panel
+src/components/dashboard/ price-chart, market-table, agent-feed, positions-panel, risk-panel, telegram-panel
 src/lib/engine-types.ts   shared client types
 ```
 

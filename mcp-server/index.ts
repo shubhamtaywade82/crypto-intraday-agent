@@ -179,6 +179,67 @@ server.tool(
   }),
 )
 
+// ── Telegram notifier tools ─────────────────────────────────────────────────
+server.tool(
+  'telegram_status',
+  'Show current Telegram notifier status (bot token masked). Notifications are powered by @nemesis-oss/tg-format and send native message entities (no parse_mode needed).',
+  {},
+  async () => ({
+    content: [{ type: 'text', text: JSON.stringify(await engineFetch('/engine/telegram/config'), null, 2) }],
+  }),
+)
+
+server.tool(
+  'telegram_configure',
+  'Configure or toggle the Telegram notifier. Pass botToken + chatId (from @BotFather and @userinfobot) to set up, or just enabled=true/false to toggle. The token is persisted in engine/data/telegram.json and never returned in plaintext.',
+  {
+    botToken: z.string().optional().describe('Bot token from @BotFather, e.g. "123456789:ABCdef…"'),
+    chatId: z.string().optional().describe('Target chat id (negative for groups, from @userinfobot)'),
+    enabled: z.boolean().optional().describe('Enable or disable all notifications'),
+    events: z.object({
+      boot: z.boolean().optional(),
+      agent: z.boolean().optional(),
+      entry: z.boolean().optional(),
+      exit: z.boolean().optional(),
+      risk_halt: z.boolean().optional(),
+      scan_digest: z.boolean().optional(),
+    }).optional().describe('Per-event enable flags'),
+  },
+  async ({ botToken, chatId, enabled, events }) => {
+    const body: any = {}
+    if (typeof botToken === 'string') body.botToken = botToken
+    if (typeof chatId === 'string') body.chatId = chatId
+    if (typeof enabled === 'boolean') body.enabled = enabled
+    if (events && typeof events === 'object') body.events = events
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify(await engineFetch('/engine/telegram/config', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }), null, 2),
+      }],
+    }
+  },
+)
+
+server.tool(
+  'telegram_test',
+  'Send a Telegram test message to verify the bot token + chat id work. Returns ok=true on success or a description of the failure.',
+  {
+    message: z.string().optional().describe('Optional custom message body to append to the test message'),
+  },
+  async ({ message }) => ({
+    content: [{
+      type: 'text',
+      text: JSON.stringify(await engineFetch('/engine/telegram/test', {
+        method: 'POST',
+        body: JSON.stringify(message ? { message } : {}),
+      }), null, 2),
+    }],
+  }),
+)
+
 // ── run ──────────────────────────────────────────────────────────────────────
 async function main() {
   const transport = new StdioServerTransport()

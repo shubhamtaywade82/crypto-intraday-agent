@@ -1,0 +1,15 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "crypto-intraday-engine",
+      "dependencies": {
+        "@nemesis-oss/tg-format": "^0.1.0",
+      },
+    },
+  },
+  "packages": {
+    "@nemesis-oss/tg-format": ["@nemesis-oss/tg-format@0.1.0", "", {}, "sha512-2hxH6SsJs2epKzMNxwYF6t38e62KAM5wF8JiZDq8RKlEPTC1m0kawIeDhqpsXoYExXnoHO4N8Lc8AW9lZkD2kg=="],
+  }
+}

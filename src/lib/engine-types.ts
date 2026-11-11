@@ -126,6 +126,19 @@ export interface Snapshot {
   logs: LogEntry[]
   decisions: LlmDecision[]
   risk: RiskSnapshot
+  telegram?: TelegramSafeConfig
+}
+
+// ── Telegram notifier (powered by @nemesis-oss/tg-format) ───────────────────
+export type TelegramEvent = 'boot' | 'agent' | 'entry' | 'exit' | 'risk_halt' | 'scan_digest'
+
+export interface TelegramSafeConfig {
+  enabled: boolean
+  hasToken: boolean
+  tokenMasked: string
+  chatId: string
+  events: Record<TelegramEvent, boolean>
+  minIntervalMs: number
 }
 
 export interface Candle {
