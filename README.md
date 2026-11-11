@@ -4,7 +4,7 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 
 - **Binance USDⓈ-M futures** market data + trading semantics — from the official `binance/binance-skills-hub` skill family (`derivatives-trading-usds-futures`, market-data, paper-trading, algo-trading, `binance-usdm-futures-tools` for the MCP/tool layer)
 - **CoinDCX** public market data — per the `ccxt/ccxt@ccxt-python` skill (same public endpoints CCXT's coindcx adapter wraps; implemented natively in TypeScript here)
-- **Agentic AI** — a crypto-trading-agent decision core powered by `z-ai-web-dev-sdk` (LLM confluence + position supervision)
+- **Agentic AI** — a crypto-trading-agent decision core powered by local Ollama (`minicpm5:2b`) with ZAI fallback (LLM confluence + position supervision)
 - **Telegram alerts** — `@nemesis-oss/tg-format` for type-safe message entities (entries, exits, risk halts, agent start/stop, scan digests)
 - **MCP server** — the engine is exposed as 15 MCP tools for any MCP host (Claude Desktop, Cursor, Claude Code)
 - **Web + CLI** — one shared engine, two frontends
@@ -17,7 +17,7 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 
 ```
                         ┌────────────────────────────────────────────────┐
-                        │   ENGINE  (mini-services/engine, bun :3005)    │
+                        │   ENGINE  (mini-services/engine, bun :3151)    │
                         │                                                │
   wss://fstream.binance.com/market/stream                ┌──────────┐   │
    ├─ !ticker@arr (universe ranking)          ┌─────────▶│ Paper    │   │
@@ -34,11 +34,11 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
                                             │          └──────────┘   │
   z-ai-web-dev-sdk (LLM confluence) ────────┘                          │
                         │                    │                          │
-              REST :3005 /engine/*     socket.io :3006 (path /)        │
+              REST :3151 /engine/*     socket.io :3152 (path /)        │
                         │                    │                          │
         ┌───────────────┴─────────┐   ┌──────┴───────────┐              │
         │  CLI  cli/agent-cli.ts  │   │  Next.js 16 UI   │              │
-        │  status/scan/open/close │   │  (direct proxy   │              │
+        │  status/scan/open/close │   │  (:3150 direct   │              │
         └─────────────────────────┘   │  or via Caddy)   │              │
                                         └─────────────────┘              │
         ┌─────────────────────────┐                                     │
@@ -56,7 +56,7 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
    - *Momentum breakout* (15m): EMA(9/21) cross + volume expansion + OI drift
    - *Mean reversion* (5m): RSI(2) < 10 / > 90 + Bollinger pierce
    - *Cross-exchange*: funding crowding + Binance-vs-CoinDCX premium
-3. **Reason** — candidates with |composite| ≥ 0.25 go to one **LLM confluence** call that weighs all families and must answer strict JSON (`BUY/SELL/HOLD` + confidence + reason). LLM outage → rule-based fallback, never a stall
+3. **Reason** — candidates with |composite| ≥ 0.25 go to one **LLM confluence** call (local Ollama `minicpm5:2b` by default, or ZAI) that weighs all families and must answer strict JSON (`BUY/SELL/HOLD` + confidence + reason). LLM outage → rule-based fallback, never a stall
 4. **Act (risk-gated)** — hard guardrails before any fill:
    - max **2% equity risk per trade** (qty sized off ATR stop distance)
    - **-3% daily loss cutoff** halts new entries
@@ -68,12 +68,12 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 ## Run it
 
 ```bash
-# 1) engine (REST :3005 + socket.io :3006)
+# 1) engine (REST :3151 + socket.io :3152)
 cd mini-services/engine && bun run dev
 # or from root:
 bun run dev:engine
 
-# 2) web dashboard (Next.js :3000 — the preview panel)
+# 2) web dashboard (Next.js :3150 — the preview panel)
 bun run dev
 
 # 3) CLI
@@ -101,7 +101,7 @@ Claude Desktop registration (`claude_desktop_config.json`):
     "crypto-intraday-agent": {
       "command": "bun",
       "args": ["/absolute/path/to/mcp-server/index.ts"],
-      "env": { "ENGINE_URL": "http://localhost:3005" }
+      "env": { "ENGINE_URL": "http://localhost:3151" }
     }
   }
 }

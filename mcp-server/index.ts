@@ -4,7 +4,7 @@
 // any MCP host (Claude Desktop, Cursor, Claude Code, …) can drive it.
 //
 // Run:            bun mcp-server/index.ts
-// Engine URL:     ENGINE_URL env var (default http://localhost:3001)
+// Engine URL:     ENGINE_URL env var (default http://localhost:3151)
 //
 // Claude Desktop config example (~/claude_desktop_config.json):
 //   {
@@ -12,7 +12,7 @@
 //       "crypto-intraday-agent": {
 //         "command": "bun",
 //         "args": ["/absolute/path/to/mcp-server/index.ts"],
-//         "env": { "ENGINE_URL": "http://localhost:3001" }
+//         "env": { "ENGINE_URL": "http://localhost:3151" }
 //       }
 //     }
 //   }
@@ -21,7 +21,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 
-const ENGINE_URL = process.env.ENGINE_URL || 'http://localhost:3005'
+const ENGINE_URL = process.env.ENGINE_URL || 'http://localhost:3151'
 
 async function engineFetch(path: string, init?: RequestInit): Promise<any> {
   const res = await fetch(`${ENGINE_URL}${path}`, {

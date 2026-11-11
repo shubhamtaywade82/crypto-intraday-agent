@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const ENGINE_PORT = process.env.ENGINE_PORT || "3005";
+const ENGINE_PORT = process.env.ENGINE_PORT || "3151";
 
 const nextConfig: NextConfig = {
   output: "standalone",

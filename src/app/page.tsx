@@ -3,7 +3,7 @@
 // ─── Crypto Futures Intraday Agent — dashboard ──────────────────────────────
 // Realtime view of the trading engine: market watch, candlestick chart,
 // agentic-AI activity, paper positions, risk guardrails and decision journal.
-// Data: socket.io (engine :3002) + REST (engine :3001) through the gateway.
+// Data: socket.io (engine :3152) + REST (engine :3151) through the gateway.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { io, type Socket } from 'socket.io-client'
@@ -115,7 +115,7 @@ export default function Dashboard() {
 
   // ── realtime wiring ──────────────────────────────────────────────────────
   useEffect(() => {
-    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3006'
+    const wsPort = process.env.NEXT_PUBLIC_WS_PORT || '3152'
     const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     const wsUrl = isLocalhost ? `http://${window.location.hostname}:${wsPort}` : `/?XTransformPort=${wsPort}`
     const socket = io(wsUrl, {

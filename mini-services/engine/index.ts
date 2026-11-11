@@ -1,8 +1,8 @@
-// ─── Engine service entry — HTTP API (:3001) + socket.io realtime (:3002) ──
+// ─── Engine service entry — HTTP API (:3151) + socket.io realtime (:3152) ──
 // socket.io must use path '/' (gateway requirement), which makes it own every
 // request on its listener — so REST and WS live on two ports in one process.
-// Next.js dashboard:  fetch('/engine/…?XTransformPort=3001')  +  io('/?XTransformPort=3002')
-// CLI / MCP server:   http://localhost:3001/engine/…
+// Next.js dashboard:  fetch('/engine/…?XTransformPort=3151')  +  io('/?XTransformPort=3152')
+// CLI / MCP server:   http://localhost:3151/engine/…
 
 import { createServer } from 'node:http'
 import { Server } from 'socket.io'
@@ -12,7 +12,7 @@ import { log, bus, clearPersisted } from './src/store'
 import * as tg from './src/telegram'
 
 const engine = new TradingEngine()
-const WS_PORT = Number(process.env.ENGINE_WS_PORT || process.env.WS_PORT || 3006)
+const WS_PORT = Number(process.env.ENGINE_WS_PORT || process.env.WS_PORT || 3152)
 
 const httpServer = createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://localhost')
@@ -39,7 +39,7 @@ const httpServer = createServer(async (req, res) => {
     })
 
   try {
-    if (p === '/engine/health') return json(200, { ok: true, ts: Date.now() })
+    if (p === '/engine/health') return json(200, { ok: true, ts: Date.now(), model: CONFIG.ollamaModel })
     if (p === '/engine/status') return json(200, engine.status)
     if (p === '/engine/snapshot') return json(200, engine.snapshot())
 

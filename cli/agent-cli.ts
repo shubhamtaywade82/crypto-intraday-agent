@@ -13,7 +13,7 @@
 //   bun cli/agent-cli.ts tg-set <chatId> <botToken>
 //   bun cli/agent-cli.ts tg-test [message]
 
-const BASE = process.env.ENGINE_URL || 'http://localhost:3005'
+const BASE = process.env.ENGINE_URL || 'http://localhost:3151'
 
 const GREEN = '\x1b[32m', RED = '\x1b[31m', YELLOW = '\x1b[33m', CYAN = '\x1b[36m', DIM = '\x1b[2m', RESET = '\x1b[0m'
 const c = (code: string, s: string | number) => `${code}${s}${RESET}`

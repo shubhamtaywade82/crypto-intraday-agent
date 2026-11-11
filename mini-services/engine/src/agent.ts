@@ -121,6 +121,46 @@ export function rulesFallbackVerdicts(candidates: Candidate[]): AgentVerdict[] {
   })
 }
 
+/** Call Ollama or fallback to ZAI for structured LLM completions */
+async function callOllama(messages: Array<{ role: string; content: string }>): Promise<string> {
+  const res = await fetch(`${CONFIG.ollamaBase}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: CONFIG.ollamaModel,
+      messages,
+      format: 'json',
+      stream: false,
+      options: { temperature: 0.2 },
+    }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`)
+  const data = (await res.json()) as { message?: { content?: string } }
+  const text = data.message?.content?.trim()
+  if (!text) throw new Error('empty content from Ollama')
+  return text
+}
+
+async function callLlm(messages: Array<{ role: string; content: string }>): Promise<string> {
+  try {
+    return await callOllama(messages)
+  } catch (ollamaErr: any) {
+    try {
+      const zai = await ZAI.create()
+      const completion = await zai.chat.completions.create({
+        messages,
+        thinking: { type: 'disabled' },
+      })
+      const text = completion.choices[0]?.message?.content
+      if (text) return text
+    } catch {
+      // Ignore ZAI failure and rethrow primary Ollama error
+    }
+    throw ollamaErr
+  }
+}
+
 export async function weighCandidates(
   candidates: Candidate[],
   context: Parameters<typeof buildUserPrompt>[1],
@@ -129,16 +169,10 @@ export async function weighCandidates(
     return { verdicts: [], source: 'rules-fallback', summary: 'no candidates passed the pre-filter' }
   }
   try {
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: 'assistant', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(candidates, context) },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const text = completion.choices[0]?.message?.content
-    if (!text) throw new Error('empty LLM response')
+    const text = await callLlm([
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt(candidates, context) },
+    ])
     const verdicts = parseVerdicts(text, candidates)
     log('llm', 'AGENT', `LLM confluence done: ${verdicts.filter((v) => v.action !== 'HOLD').map((v) => `${v.symbol}:${v.action}@${(v.confidence * 100).toFixed(0)}%`).join(' ') || 'all HOLD'}`)
     const summary = verdicts
@@ -168,25 +202,20 @@ export async function reviewPosition(
 ): Promise<{ exit: boolean; reason: string }> {
   const pnlPct = (ticker.price - pos.entry) / pos.entry * (pos.side === 'LONG' ? 1 : -1)
   try {
-    const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content: `You supervise open intraday futures positions (paper mode). Decide whether to EXIT EARLY or HOLD.
+    const text = await callLlm([
+      {
+        role: 'system',
+        content: `You supervise open intraday futures positions (paper mode). Decide whether to EXIT EARLY or HOLD.
 Reply STRICT JSON: {"exit": true|false, "reason":"one sentence"}
 Exit only when the original thesis is clearly invalidated (opposite momentum shift, funding squeeze against the side). Small adverse moves are noise.`,
-        },
-        {
-          role: 'user',
-          content: `Position: ${pos.side} ${pos.symbol} qty=${pos.qty} entry=${pos.entry} opened because: ${pos.rationale}
+      },
+      {
+        role: 'user',
+        content: `Position: ${pos.side} ${pos.symbol} qty=${pos.qty} entry=${pos.entry} opened because: ${pos.rationale}
 Now: price=${ticker.price} pnl=${(pnlPct * 100).toFixed(2)}% funding=${(ticker.fundingRate * 100).toFixed(4)}% OI15m=${ticker.oiChangePct ?? 'n/a'}
 Signals: momentum=${ticker.signals?.momentum.score} (${ticker.signals?.momentum.note}) meanRev=${ticker.signals?.meanRev.score} spread=${ticker.signals?.spread.score}`,
-        },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const text = completion.choices[0]?.message?.content || ''
+      },
+    ])
     const m = text.match(/\{[\s\S]*\}/)
     if (m) {
       const obj = JSON.parse(m[0])

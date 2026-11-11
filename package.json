@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3150 2>&1 | tee dev.log",
     "dev:engine": "cd mini-services/engine && bun run dev",
     "build:engine": "cd mini-services/engine && bun run build",
     "start:engine": "cd mini-services/engine && bun run start",

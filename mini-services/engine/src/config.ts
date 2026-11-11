@@ -1,7 +1,11 @@
 // ─── Engine configuration & risk limits ─────────────────────────────────────
 
 export const CONFIG = {
-  port: Number(process.env.ENGINE_PORT || process.env.PORT || 3005),
+  port: Number(process.env.ENGINE_PORT || process.env.PORT || 3151),
+
+  // Ollama local LLM
+  ollamaBase: process.env.OLLAMA_BASE_URL || process.env.OLLAMA_HOST || 'http://localhost:11434',
+  ollamaModel: process.env.OLLAMA_MODEL || 'minicpm5:2b',
 
   // Paper account
   initialEquity: 10_000,        // USDT virtual capital
