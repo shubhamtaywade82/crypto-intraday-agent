@@ -62,3 +62,4 @@ tool-results/
 mini-services/engine/data/
 .agents/
 skills-lock.json
+.omc
