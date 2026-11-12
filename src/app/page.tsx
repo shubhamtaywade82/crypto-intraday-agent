@@ -368,7 +368,7 @@ export default function Dashboard() {
           </div>
 
           {/* right: agent feed */}
-          <Card className="border-zinc-800 bg-zinc-950/70 py-0 gap-0 self-start">
+          <Card className="flex flex-col border-zinc-800 bg-zinc-950/70 py-0 gap-0">
             <CardHeader className="border-b border-zinc-800/70 py-3">
               <CardTitle className="flex items-center gap-2 text-sm font-medium text-zinc-200">
                 <Activity className="h-4 w-4 text-emerald-400" aria-hidden />
@@ -378,7 +378,7 @@ export default function Dashboard() {
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-2">
+            <CardContent className="relative min-h-[320px] flex-1 p-2">
               <AgentFeed logs={logs.slice(-160)} />
             </CardContent>
           </Card>

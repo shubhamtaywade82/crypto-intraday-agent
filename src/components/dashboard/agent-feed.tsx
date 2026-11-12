@@ -59,7 +59,7 @@ export function AgentFeed({ logs }: Props) {
   }, [logs.length, autoScroll])
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="absolute inset-2 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-1 pb-1 border-b border-zinc-800/80">
         <div className="flex items-center gap-1">
           {(['all', 'trade', 'llm', 'alerts'] as FilterKey[]).map((key) => (
@@ -86,7 +86,7 @@ export function AgentFeed({ logs }: Props) {
         </Button>
       </div>
 
-      <ScrollArea className="h-[400px] rounded-md border border-zinc-800/70 bg-zinc-950/60 p-2">
+      <ScrollArea className="min-h-0 flex-1 rounded-md border border-zinc-800/70 bg-zinc-950/60 p-2">
         <div role="log" aria-live="polite">
           {filteredLogs.length === 0 ? (
             <p className="py-12 text-center font-mono text-xs text-zinc-600">no telemetry events recorded</p>
