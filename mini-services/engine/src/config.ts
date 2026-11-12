@@ -21,6 +21,7 @@ export const CONFIG = {
   cooldownAfterLossMin: 30,     // per-symbol cooldown after a stop-out
   atrStopMult: 1.5,             // stop distance = 1.5 × ATR(14)
   tpRewardRisk: 2.0,            // take-profit = 2 × stop distance
+  minHoldBeforeReviewMin: 30,   // LLM supervisor may not exit before this; stops/targets decide first
   maxPositionAgeMin: 240,       // intraday: force "eod" flatten after 4h
 
   // v2 risk extensions
@@ -47,6 +48,8 @@ export const CONFIG = {
   scanIntervalSec: 60,          // one agent cycle per minute
   symbolsRefreshMin: 5,         // refresh top-10 universe
   symbolUniverseSize: 10,
+  minQuoteVolumeUsd: 100_000_000, // liquid majors only; thin coins gap through stops
+  maxAbsChangePct: 8,           // skip coins already in a 24h news-driven move
   alwaysInclude: ['BTCUSDT', 'ETHUSDT'],
   klinesBootstrap: 220,         // candles of history per timeframe
   compositeThreshold: 0.25,     // min |composite| to become an LLM candidate

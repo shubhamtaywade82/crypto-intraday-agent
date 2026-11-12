@@ -14,6 +14,7 @@
 
 import { CONFIG } from './config'
 import { atr, median } from './indicators'
+import { loadDailyStart, saveDailyStart } from './store'
 import type { AccountState, RiskState, Position, Candle } from './types'
 
 export type SizingMode = 'fixed-fractional' | 'quarter-kelly' | 'vol-target'
@@ -45,6 +46,17 @@ export class RiskManager {
     this.state.haltedReason = null
     this.state.cooldownUntil = {}
     this.lossStreak = 0
+    saveDailyStart(new Date().toISOString().slice(0, 10), equity)
+  }
+
+  /** On restart keep today's baseline so the daily-loss cutoff can't be reset by restarting. */
+  restoreDay(equityIfNewDay: number) {
+    const saved = loadDailyStart()
+    if (saved && saved.day === new Date().toISOString().slice(0, 10)) {
+      this.state.dailyStartEquity = saved.equity
+      return
+    }
+    this.newDay(equityIfNewDay)
   }
 
   /** Update daily PnL (realized + unrealized) and evaluate the loss cutoff. */

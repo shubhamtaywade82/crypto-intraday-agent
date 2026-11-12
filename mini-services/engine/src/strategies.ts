@@ -367,6 +367,8 @@ export function computeSignals(inp: StrategyInputs) {
   const momentum = momentumSignal(inp)
   const meanRev = meanReversionSignal(inp)
   const spread = spreadSignal(inp)
+  // Counter-trend RSI(2) dip-buys lose in sustained dumps (INIT, ZEC); only take pullbacks with the trend.
+  if (meanRev.dir !== momentum.dir) meanRev.score = 0
   const composite =
     momentum.score * 0.45 +
     meanRev.score * 0.30 +

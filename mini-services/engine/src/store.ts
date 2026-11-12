@@ -99,6 +99,14 @@ export function loadAccountPatch(): Partial<AccountState> | null {
   }
 }
 
+export function loadDailyStart(): { day: string; equity: number } | null {
+  return readJson<{ day: string; equity: number } | null>('daily.json', null)
+}
+
+export function saveDailyStart(day: string, equity: number) {
+  writeJson('daily.json', { day, equity })
+}
+
 export function clearPersisted() {
   for (const f of ['account.json', 'decisions.json', 'logs.json']) {
     try {

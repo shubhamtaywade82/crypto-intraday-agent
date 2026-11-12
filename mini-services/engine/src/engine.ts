@@ -71,7 +71,9 @@ export class TradingEngine {
   // ── lifecycle ────────────────────────────────────────────────────────────
   async start() {
     log('info', 'ENGINE', 'starting intraday engine (paper mode)…')
-    this.risk.newDay(this.paper.account.balance)
+    const utcMidnight = new Date().setUTCHours(0, 0, 0, 0)
+    const realizedToday = this.paper.account.trades.filter((t) => t.closedAt >= utcMidnight).reduce((sum, t) => sum + t.pnl, 0)
+    this.risk.restoreDay(this.paper.account.balance - realizedToday)
     this.wireTelegram()
     dcx.refreshFx().then(() => { this.status.usdtInr = dcx.fx().usdtInr; this.status.usdtInrSource = dcx.fx().usdtInrSource })
 
@@ -215,7 +217,7 @@ export class TradingEngine {
   async refreshUniverse() {
     if (!this.perpetuals.size) this.perpetuals = await getExchangeInfoSymbols()
     const rows = [...this.tickers.values()]
-      .filter((t) => this.perpetuals.has(t.symbol) && t.quoteVolume > 5_000_000 && !this.noDataSymbols.has(t.symbol))
+      .filter((t) => this.perpetuals.has(t.symbol) && t.quoteVolume > CONFIG.minQuoteVolumeUsd && Math.abs(t.changePct) <= CONFIG.maxAbsChangePct && !this.noDataSymbols.has(t.symbol))
       .sort((a, b) => b.quoteVolume - a.quoteVolume)
       .slice(0, CONFIG.symbolUniverseSize)
       .map((t) => t.symbol)
@@ -547,6 +549,10 @@ export class TradingEngine {
         for (const p of this.paper.account.positions) {
           const row = this.scanRows.get(p.symbol)
           if (!row) continue
+          const heldMin = (Date.now() - p.openedAt) / 60_000
+          const isLosing = (p.side === 'LONG' ? row.price - p.entry : p.entry - row.price) < 0
+          // winners run to take-profit; a 2B model must not cut them
+          if (heldMin < CONFIG.minHoldBeforeReviewMin || !isLosing) continue
           const { exit, reason } = await reviewPosition(p, row)
           if (exit) {
             const px = prices[p.symbol] ?? row.price
