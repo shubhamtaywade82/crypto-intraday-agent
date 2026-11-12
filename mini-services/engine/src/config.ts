@@ -23,6 +23,26 @@ export const CONFIG = {
   tpRewardRisk: 2.0,            // take-profit = 2 × stop distance
   maxPositionAgeMin: 240,       // intraday: force "eod" flatten after 4h
 
+  // v2 risk extensions
+  sizingMode: (process.env.SIZING_MODE as 'fixed-fractional' | 'quarter-kelly' | 'vol-target') || 'fixed-fractional',
+  kellyWindow: 50,              // trades used by the live Kelly estimator
+  kellyMinTrades: 20,           // below this count, quarter-Kelly falls back
+  volTargetAtrPct: 0.004,       // baseline ATR% (0.4%/15m) for vol-target scaling
+  maxConsecutiveLosses: 4,      // circuit breaker: halt after N losses in a row
+  trailingStopEnabled: true,    // chandelier trailing (checks every 5s heartbeat)
+  trailingStopAtrMult: 3.0,     // trail distance = 3 × ATR(14)
+  trailBreakevenAtR: 1.0,       // move stop to breakeven once +1R in profit
+
+  // v2 agent architecture
+  agentMode: (process.env.AGENT_MODE as 'single' | 'debate') || 'single',  // 'debate' = bull/bear/judge pipeline
+  debateTimeoutMs: 90_000,      // whole-debate budget before falling back
+  extendedSignals: process.env.EXTENDED_SIGNALS !== '0',   // 10-family + confluence stack
+
+  // v2 derivatives data
+  fetchLsRatios: process.env.FETCH_LS_RATIOS !== '0',       // long/short ratio polling
+  liquidationWindowMs: 3600_000,                            // rolling liquidation window (1h)
+  liquidationBaselineUsd: 250_000,                          // cascade threshold baseline
+
   // Agent cadence
   scanIntervalSec: 60,          // one agent cycle per minute
   symbolsRefreshMin: 5,         // refresh top-10 universe

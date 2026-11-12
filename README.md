@@ -51,18 +51,26 @@ A full-auto **intraday crypto futures paper-trading system** built from skills d
 
 ## The agent loop (every 60 s)
 
-1. **Perceive** — refresh top-10 USDT-M perps by 24h volume (BTC/ETH always included), candles, funding, 15m open-interest change, CoinDCX prices when reachable
-2. **Quantify** — three strategy families score each symbol:
+1. **Perceive** — refresh top-10 USDT-M perps by 24h volume (BTC/ETH always included), 5m/15m/**1h** candles, funding (+ settled funding history), 15m open-interest change, **long/short ratios, live liquidation stream**, CoinDCX prices when reachable
+2. **Quantify** — **ten strategy families** score each symbol through the **confluence engine**:
    - *Momentum breakout* (15m): EMA(9/21) cross + volume expansion + OI drift
    - *Mean reversion* (5m): RSI(2) < 10 / > 90 + Bollinger pierce
    - *Cross-exchange*: funding crowding + Binance-vs-CoinDCX premium
-3. **Reason** — candidates with |composite| ≥ 0.25 go to one **LLM confluence** call (local Ollama `minicpm5:2b` by default, or ZAI) that weighs all families and must answer strict JSON (`BUY/SELL/HOLD` + confidence + reason). LLM outage → rule-based fallback, never a stall
+   - *Liquidity sweep* (SMC): EQH/EQL stop-hunt + CHoCH confirmation
+   - *Squeeze breakout*: TTM squeeze (BB inside KC) fires with volume
+   - *Order block tap*: displacement OB in premium/discount zone
+   - *Session breakout*: Asia range break in London/NY + OI confirm
+   - *Funding flip*: healthy trend while funding resets to neutral
+   - *Cascade snapback*: liquidation-cascade exhaustion + reclaim
+   - *VWAP reversion*: ±2σ stretch from rolling VWAP
+   Five evidence stacks (**trend / momentum / volume / derivatives / structure**) vote; a regime gate (trend-up/down/range/volatile/quiet from ADX + BB-width percentile) permits only matching setup classes; a library of **named playbook setups** (london-sweep-reversal, squeeze-breakout, ob-confluence-tap, cascade-snapback, ny-continuation, …) boosts aligned composites. See [`docs/PLAYBOOK.md`](docs/PLAYBOOK.md).
+3. **Reason** — candidates with |composite| ≥ 0.25 go to the LLM confluence call (local Ollama `minicpm5:2b` by default). Two agent modes: `single` (one structured JSON call) or `AGENT_MODE=debate` — an adversarial **bull-analyst → bear-analyst → judge** pipeline. LLM outage → rule-based confluence fallback, never a stall
 4. **Act (risk-gated)** — hard guardrails before any fill:
-   - max **2% equity risk per trade** (qty sized off ATR stop distance)
-   - **-3% daily loss cutoff** halts new entries
+   - max **2% equity risk per trade** (qty sized off ATR stop distance; optional `quarter-kelly` / `vol-target` sizing via `SIZING_MODE`)
+   - **-3% daily loss cutoff** and a **4-loss circuit breaker** halt new entries
    - max **3 concurrent positions**, ≤ **5× leverage**, **30-min cooldown** after a stop-out
-   - every position carries an **ATR bracket** (SL = 1.5×ATR, TP = 2R) checked every 5 s; 4h max hold (intraday)
-5. **Supervise** — every 3rd cycle the LLM re-reviews open positions and can exit early when the thesis breaks
+   - every position carries an **ATR bracket** (SL = 1.5×ATR, TP = 2R) + **3×ATR chandelier trailing stop** (breakeven at +1R), checked every 5 s; 4h max hold (intraday)
+5. **Supervise** — every 3rd cycle the LLM re-reviews open positions (with confluence + opposing-setup context) and can exit early when the thesis breaks
 6. **Journal** — every decision lands in the feed + decision journal (UI/CLI/MCP all read it)
 
 ## Run it
@@ -79,11 +87,16 @@ bun run dev
 # 3) CLI
 bun cli/agent-cli.ts status
 bun cli/agent-cli.ts scan            # one agent cycle now
+bun cli/agent-cli.ts analyze BTCUSDT # deep analysis: all families + confluence + setups
 bun cli/agent-cli.ts open BTCUSDT LONG 0.01
 bun cli/agent-cli.ts close BTCUSDT
 bun cli/agent-cli.ts spreads         # cross-exchange scanner
 
-# 3b) Telegram notifier (powered by @nemesis-oss/tg-format)
+# 3b) signal-stack regression net (offline, deterministic)
+bun scripts/test-signals.ts         # 77 assertions across the whole stack
+bun scripts/test-signals.ts BTCUSDT # live deep analysis via Binance REST
+
+# 3c) Telegram notifier (powered by @nemesis-oss/tg-format)
 bun cli/agent-cli.ts tg-set <chatId> <botToken>   # configure + enable
 bun cli/agent-cli.ts tg-test                       # send a test message
 bun cli/agent-cli.ts tg-on | tg-off                # toggle
@@ -107,7 +120,7 @@ Claude Desktop registration (`claude_desktop_config.json`):
 }
 ```
 
-MCP tools: `engine_status`, `market_snapshot`, `spread_scan`, `open_positions`, `trade_history`, `agent_decisions`, `run_scan`, `agent_start`, `agent_stop`, `place_paper_order`, `close_position`, `reset_paper_account`, **`telegram_status`**, **`telegram_configure`**, **`telegram_test`**.
+MCP tools: `engine_status`, `market_snapshot`, **`deep_analysis`**, `spread_scan`, `open_positions`, `trade_history`, `agent_decisions`, `run_scan`, `agent_start`, `agent_stop`, `place_paper_order`, `close_position`, `reset_paper_account`, **`telegram_status`**, **`telegram_configure`**, **`telegram_test`**.
 
 ## Telegram notifications
 
@@ -170,13 +183,28 @@ or in the dashboard (token is always masked when read back).
 
 ```
 mini-services/engine/     trading engine (bun): binance.ts, coindcx.ts, indicators.ts,
-                          strategies.ts, paper.ts, risk.ts, agent.ts, telegram.ts, engine.ts, index.ts
-mcp-server/               stdio MCP server → engine REST
-cli/agent-cli.ts          headless CLI
+                          structure.ts (SMC/ICT), derivatives.ts (funding/OI/liquidations),
+                          confluence.ts (regime + 5-stack voting + setups), strategies.ts
+                          (10 families), paper.ts, risk.ts, agent.ts (single/debate),
+                          telegram.ts, engine.ts, index.ts
+docs/PLAYBOOK.md          the full signal/strategy/confluence/setup reference
+mcp-server/               stdio MCP server → engine REST (16 tools, incl. deep_analysis)
+cli/agent-cli.ts          headless CLI (status/scan/analyze/open/close/spreads/…)
+scripts/test-signals.ts   offline regression net for the whole signal stack (77 checks)
 src/app/page.tsx          dashboard (single / route)
 src/components/dashboard/ price-chart, market-table, agent-feed, positions-panel, risk-panel, telegram-panel
 src/lib/engine-types.ts   shared client types
 ```
+
+### Engine configuration (env)
+
+| Var | Default | Effect |
+|---|---|---|
+| `AGENT_MODE` | `single` | `debate` = bull/bear/judge three-call pipeline |
+| `SIZING_MODE` | `fixed-fractional` | `quarter-kelly` / `vol-target` position sizing |
+| `EXTENDED_SIGNALS` | `1` | `0` = legacy 3-family composite |
+| `FETCH_LS_RATIOS` | `1` | `0` = skip long/short ratio polling |
+| `OLLAMA_BASE_URL` / `OLLAMA_MODEL` | `http://localhost:11434` / `minicpm5:2b` | LLM backend |
 
 ## Skills used (find-skills flow)
 

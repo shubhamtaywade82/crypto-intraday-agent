@@ -45,11 +45,18 @@ const httpServer = createServer(async (req, res) => {
 
     if (p === '/engine/klines') {
       const symbol = (url.searchParams.get('symbol') || 'BTCUSDT').toUpperCase()
-      const tf = (url.searchParams.get('tf') === '5m' ? '5m' : '15m')
+      const tf = (url.searchParams.get('tf') === '5m' ? '5m' : url.searchParams.get('tf') === '1h' ? '1h' : '15m')
       const limit = Math.min(500, Math.max(50, parseInt(url.searchParams.get('limit') || '200', 10)))
       const store = engine.candles.get(symbol)
       if (!store || !store[tf].length) return json(404, { error: `no history for ${symbol} ${tf}` })
       return json(200, { symbol, tf, candles: store[tf].slice(-limit) })
+    }
+
+    // ── deep single-symbol analysis (all families + confluence + setups) ─────
+    if (p.startsWith('/engine/analysis/')) {
+      const symbol = decodeURIComponent(p.split('/')[3] || '')
+      const r = engine.deepAnalysis(symbol)
+      return json(r.ok ? 200 : 404, r)
     }
 
     if (p === '/engine/scan' && req.method === 'POST') {

@@ -1,15 +1,28 @@
 // ─── Risk manager — the full-auto guardrails ────────────────────────────────
-// • max 2% equity risk per trade (position sized off stop distance)
-// • daily loss cutoff -3% → no new entries until midnight UTC
-// • max 3 concurrent positions, ≤5x notional leverage each
-// • per-symbol cooldown after a stop-loss
-// • confidence floor 0.60 for agent entries
+// v1 guardrails (unchanged):
+//   • max 2% equity risk per trade (position sized off stop distance)
+//   • daily loss cutoff -3% → no new entries until midnight UTC
+//   • max 3 concurrent positions, ≤5x notional leverage each
+//   • per-symbol cooldown after a stop-loss
+//   • confidence floor 0.60 for agent entries
+// v2 additions:
+//   • trailing stops — chandelier (3×ATR) that only ever tightens
+//   • consecutive-loss circuit breaker (halt after N losses in a row)
+//   • sizing modes: fixed-fractional | quarter-Kelly (from live trade stats)
+//     | vol-target (inverse-ATR sizing vs universe median)
+//   • trade-result tracking feeding the streak breaker + Kelly estimator
 
 import { CONFIG } from './config'
-import type { AccountState, RiskState, Position } from './types'
+import { atr, median } from './indicators'
+import type { AccountState, RiskState, Position, Candle } from './types'
+
+export type SizingMode = 'fixed-fractional' | 'quarter-kelly' | 'vol-target'
 
 export class RiskManager {
   state: RiskState
+  lossStreak = 0
+  winStreak = 0
+  private lastLossStreakNotified = 0
 
   constructor(private getAccount: () => AccountState) {
     this.state = {
@@ -31,6 +44,7 @@ export class RiskManager {
     this.state.dailyPnl = 0
     this.state.haltedReason = null
     this.state.cooldownUntil = {}
+    this.lossStreak = 0
   }
 
   /** Update daily PnL (realized + unrealized) and evaluate the loss cutoff. */
@@ -42,7 +56,28 @@ export class RiskManager {
       // recover only well past the cutoff
       this.state.haltedReason = null
     }
+    // consecutive-loss circuit breaker (independent of the daily cutoff)
+    if (!this.state.haltedReason && this.lossStreak >= CONFIG.maxConsecutiveLosses) {
+      this.state.haltedReason = `${this.lossStreak} consecutive losses — circuit breaker engaged`
+    } else if (this.state.haltedReason?.includes('consecutive losses') && this.lossStreak < CONFIG.maxConsecutiveLosses) {
+      this.state.haltedReason = null
+    }
     return { halted: !!this.state.haltedReason, reason: this.state.haltedReason }
+  }
+
+  /** Feed every closed trade so streaks + Kelly stats stay live. */
+  noteTradeResult(pnl: number) {
+    if (pnl < 0) {
+      this.lossStreak++
+      this.winStreak = 0
+      if (this.lossStreak >= CONFIG.maxConsecutiveLosses && this.lossStreak > this.lastLossStreakNotified) {
+        this.lastLossStreakNotified = this.lossStreak
+      }
+    } else if (pnl > 0) {
+      this.winStreak++
+      this.lossStreak = 0
+      this.lastLossStreakNotified = 0
+    }
   }
 
   noteStopLoss(symbol: string) {
@@ -55,6 +90,23 @@ export class RiskManager {
     return Math.max(0, Math.ceil((until - Date.now()) / 60_000))
   }
 
+  /** Kelly fraction from live trade history (guard-railed, quarter-Kelly). */
+  kellyFraction(): number {
+    const trades = this.getAccount().trades.slice(-CONFIG.kellyWindow)
+    if (trades.length < CONFIG.kellyMinTrades) return 0 // not enough data — fall back
+    const wins = trades.filter((t) => t.pnl > 0)
+    const losses = trades.filter((t) => t.pnl < 0)
+    if (!wins.length || !losses.length) return 0
+    const p = wins.length / trades.length
+    const avgWin = wins.reduce((a, t) => a + t.pnl, 0) / wins.length
+    const avgLoss = Math.abs(losses.reduce((a, t) => a + t.pnl, 0) / losses.length)
+    if (!avgLoss) return 0
+    const b = avgWin / avgLoss
+    const kelly = (p * (b + 1) - 1) / b
+    if (!Number.isFinite(kelly) || kelly <= 0) return 0
+    return Math.min(CONFIG.riskPerTradePct, kelly / 4) // quarter-Kelly, capped at base risk
+  }
+
   /**
    * Validate a proposed trade; returns rejection reason or sizing plan.
    * qty is derived so that (entry−stop) × qty ≈ riskBudget.
@@ -65,7 +117,8 @@ export class RiskManager {
     entry: number
     stop: number
     confidence: number
-  }): { ok: true; qty: number; riskUsd: number } | { ok: false; reason: string } {
+    candles?: Candle[]             // for vol-target sizing
+  }): { ok: true; qty: number; riskUsd: number; sizing: SizingMode } | { ok: false; reason: string } {
     const acc = this.getAccount()
     const st = this.state
 
@@ -81,7 +134,25 @@ export class RiskManager {
     if (stopDist <= 0) return { ok: false, reason: 'invalid stop distance' }
 
     const equity = acc.equity || acc.balance
-    const riskUsd = equity * st.riskPerTradePct
+
+    // ── sizing mode selection ──
+    let mode: SizingMode = CONFIG.sizingMode
+    let riskPct = st.riskPerTradePct
+    if (mode === 'quarter-kelly') {
+      const k = this.kellyFraction()
+      if (k > 0) riskPct = k
+      else mode = 'fixed-fractional' // insufficient/losing history → base risk
+    }
+    if (mode === 'vol-target' && opts.candles?.length) {
+      // scale risk inversely with current ATR% (calmer market → full risk)
+      const a = atr(opts.candles.filter((c) => c.closed), 14)
+      const atrPct = a / opts.entry
+      const baseline = CONFIG.volTargetAtrPct
+      const scale = median([atrPct / baseline, 0.5, 1.5]) // clamp 0.5..1.5
+      riskPct = st.riskPerTradePct / scale
+    }
+
+    const riskUsd = equity * riskPct
     let qty = riskUsd / stopDist
 
     // leverage cap: notional ≤ equity × maxLeverage
@@ -96,7 +167,35 @@ export class RiskManager {
     }
     if (!Number.isFinite(qty) || qty <= 0) return { ok: false, reason: 'qty computed ≤ 0' }
 
-    return { ok: true, qty: Number(qty.toFixed(6)), riskUsd: Number(riskUsd.toFixed(2)) }
+    return { ok: true, qty: Number(qty.toFixed(6)), riskUsd: Number(riskUsd.toFixed(2)), sizing: mode }
+  }
+
+  /**
+   * Chandelier trailing stop — move the stop in the trade's favour only.
+   * Returns the new stop when it tightened, else null.
+   */
+  applyTrailingStop(pos: Position, price: number, candles: Candle[]): number | null {
+    if (!CONFIG.trailingStopEnabled) return null
+    const closed = candles.filter((c) => c.closed)
+    if (closed.length < 20) return null
+    const a = atr(closed, 14)
+    if (!a) return null
+    const mult = CONFIG.trailingStopAtrMult
+    if (pos.side === 'LONG') {
+      const candidate = price - a * mult
+      // trail at least to breakeven once 1R in profit
+      const r = pos.entry - pos.stop
+      const be = pos.entry + r * CONFIG.trailBreakevenAtR
+      const newStop = price - pos.entry > r * CONFIG.trailBreakevenAtR ? Math.max(candidate, be) : candidate
+      if (newStop > pos.stop) return Number(newStop.toFixed(6))
+    } else {
+      const candidate = price + a * mult
+      const r = pos.stop - pos.entry
+      const be = pos.entry - r * CONFIG.trailBreakevenAtR
+      const newStop = pos.entry - price > r * CONFIG.trailBreakevenAtR ? Math.min(candidate, be) : candidate
+      if (newStop < pos.stop) return Number(newStop.toFixed(6))
+    }
+    return null
   }
 }
 

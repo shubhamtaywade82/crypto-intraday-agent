@@ -6,6 +6,7 @@
 //   bun cli/agent-cli.ts scan                 # one agent cycle now
 //   bun cli/agent-cli.ts start | stop         # autonomous loop on/off
 //   bun cli/agent-cli.ts positions | history | decisions | spreads
+//   bun cli/agent-cli.ts analyze BTCUSDT      # deep analysis (all families + setups)
 //   bun cli/agent-cli.ts open BTCUSDT LONG [qty]
 //   bun cli/agent-cli.ts close BTCUSDT
 //   bun cli/agent-cli.ts reset
@@ -57,6 +58,7 @@ function box(title: string, lines: string[]) {
 }
 
 const fmtTime = (ts: number) => new Date(ts).toLocaleTimeString('en-GB', { hour12: false })
+const fmtSig = (s: any) => `${s.score >= 0 ? c(GREEN, ('+' + s.score.toFixed(2)).padStart(6)) : c(RED, s.score.toFixed(2).padStart(6))} ${c(DIM, String(s.note).slice(0, 60))}`
 
 const cmd = process.argv[2] || 'status'
 const arg1 = process.argv[3]
@@ -152,6 +154,38 @@ switch (cmd) {
     break
   }
 
+  case 'analyze': {
+    if (!arg1) { console.error('usage: analyze <SYMBOL>'); process.exit(1) }
+    const a = await api(`/engine/analysis/${encodeURIComponent(arg1.toUpperCase())}`)
+    if (!a.ok) { console.error(c(RED, `✗ ${a.error}`)); process.exit(1) }
+    const ind = a.indicators
+    const d = a.derivatives
+    box(`${a.symbol} @ ${a.price} — DEEP ANALYSIS (${new Date(a.generatedAt).toLocaleTimeString('en-GB', { hour12: false })})`, [
+      `regime       : ${c(CYAN, a.regime.regime)} (ADX ${a.regime.adx}, BBw pct ${(a.regime.bbWidthPctile * 100).toFixed(0)})`,
+      `composite    : ${a.composite >= 0 ? c(GREEN, String(a.composite)) : c(RED, String(a.composite))}   confluence: ${a.confluence.score} (${a.confluence.agreement}/5 stacks agree, regime-aligned: ${a.confluence.regimeAligned ? 'yes' : 'no'})`,
+      `trend        : EMA9 ${ind.ema.e9?.toFixed(4)} / EMA21 ${ind.ema.e21?.toFixed(4)} / EMA50 ${ind.ema.e50?.toFixed(4)}  SuperTrend ${ind.superTrend.dir > 0 ? c(GREEN, 'UP') : c(RED, 'DOWN')} @ ${ind.superTrend.value.toFixed(4)}`,
+      `momentum     : RSI14 ${ind.rsi14?.toFixed(1)} ${ind.rsiDivergence ? c(YELLOW, ind.rsiDivergence) : ''}  Stoch ${ind.stoch.k.toFixed(0)}/${ind.stoch.d.toFixed(0)}  MACD hist ${ind.macd.hist >= 0 ? '+' : ''}${ind.macd.hist.toPrecision(3)}  ADX ${ind.adx.adx.toFixed(0)} (+DI ${ind.adx.plusDi.toFixed(0)} / -DI ${ind.adx.minusDi.toFixed(0)})`,
+      `volatility   : BB width ${(ind.bollinger.width * 100).toFixed(2)}%  squeeze: ${ind.squeeze.squeezing ? c(YELLOW, 'COILING') : ind.squeeze.fired ? c(CYAN, 'FIRED ' + ind.squeeze.fired) : 'none'}  ATR ${ind.atr.toFixed(4)}`,
+      `volume       : MFI ${ind.mfi.toFixed(0)}  CMF ${ind.cmf.toFixed(2)}  CVD slope ${ind.cvdSlope.toFixed(2)}  Ichimoku: price ${ind.ichimoku.priceAboveCloud === true ? c(GREEN, 'above cloud') : ind.ichimoku.priceAboveCloud === false ? c(RED, 'below cloud') : 'in cloud'}`,
+      `structure    : trend ${a.structure.trend} ${a.structure.labels.join('/')}  ${a.structure.bos ? `${a.structure.bos.kind} ${a.structure.bos.dir > 0 ? '↑' : '↓'} ${a.structure.bos.barsAgo} bars ago` : 'no BOS'}  ${a.structure.sweep ? `sweep ${a.structure.sweep.dir > 0 ? 'of lows' : 'of highs'}` : 'no sweep'}`,
+      `smc          : ${a.structure.nearestOb ? `${a.structure.nearestOb.dir > 0 ? 'bullish' : 'bearish'} OB ${a.structure.nearestOb.distPct.toFixed(2)}% away` : 'no OB nearby'}  ${a.structure.nearestFvg ? `FVG ${a.structure.nearestFvg.distPct.toFixed(2)}% away` : ''}  zone: ${a.structure.rangeCtx.zone} (${(a.structure.rangeCtx.positionPct * 100).toFixed(0)}% of range)`,
+      `derivatives  : ${d.funding.label} (z=${d.funding.z})  OI: ${d.oi.label}  crowd: ${d.ls.crowd}  ${d.liq.cascade ? c(RED, d.liq.note) : d.liq.note}`,
+      `session      : ${a.structure.session.session}${a.structure.session.killZone ? ` (${a.structure.session.killZone})` : ''} — ${a.structure.session.note}`,
+    ])
+    box('STRATEGY FAMILIES', [
+      `momentum      ${fmtSig(a.families.momentum)}  meanRev   ${fmtSig(a.families.meanRev)}`,
+      `spread        ${fmtSig(a.families.spread)}  liqSweep  ${fmtSig(a.families.liquiditySweep)}`,
+      `squeeze       ${fmtSig(a.families.squeezeBreakout)}  orderBlk  ${fmtSig(a.families.orderBlock)}`,
+      `session       ${fmtSig(a.families.sessionBreakout)}  funding   ${fmtSig(a.families.fundingFlip)}`,
+      `cascade       ${fmtSig(a.families.cascadeSnapback)}  vwapRev   ${fmtSig(a.families.vwapReversion)}`,
+    ])
+    const active = a.setups.filter((s: any) => s.dir !== 0 && s.strength >= 0.5)
+    box('SETUP PLAYBOOK', active.length
+      ? active.map((s: any) => `${s.name.padEnd(26)} ${s.dir > 0 ? c(GREEN, 'LONG ') : c(RED, 'SHORT')} str ${(s.strength * 100).toFixed(0)}%  ${c(DIM, s.note)}`)
+      : ['no named setups firing right now'])
+    break
+  }
+
   case 'open': {
     if (!arg1 || !arg2) { console.error('usage: open <SYMBOL> <LONG|SHORT> [qty]'); process.exit(1) }
     const res = await fetch(`${BASE}/engine/order`, {
@@ -224,6 +258,7 @@ commands:
   history       closed trades
   decisions     agentic-AI decision journal
   spreads       Binance vs CoinDCX spread scanner
+  analyze SYM   deep analysis: indicators + structure + derivatives + setups
   open SYM LONG|SHORT [qty]   manual paper order
   close SYM     close a position
   reset         reset paper account to 10,000 USDT

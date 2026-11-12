@@ -2,11 +2,34 @@
 
 export type Side = 'LONG' | 'SHORT'
 
+export interface SignalOut {
+  score: number
+  dir: -1 | 0 | 1
+  note: string
+}
+
 export interface SignalSet {
-  momentum: { score: number; dir: -1 | 0 | 1; note: string }
-  meanRev: { score: number; dir: -1 | 0 | 1; note: string }
-  spread: { score: number; dir: -1 | 0 | 1; note: string }
+  momentum: SignalOut
+  meanRev: SignalOut
+  spread: SignalOut
   composite: number
+  // ── extended v2 families (optional — the engine fills these when live) ──
+  liquiditySweep?: SignalOut
+  squeezeBreakout?: SignalOut
+  orderBlock?: SignalOut
+  sessionBreakout?: SignalOut
+  fundingFlip?: SignalOut
+  cascadeSnapback?: SignalOut
+  vwapReversion?: SignalOut
+  regime?: { label: string; adx: number; bbWidthPctile: number; note: string }
+  confluence?: {
+    score: number
+    dir: -1 | 0 | 1
+    agreement: number
+    regimeAligned: boolean
+    stacks: Array<{ name: string; dir: -1 | 0 | 1; score: number; notes: string[] }>
+    setups: Array<{ name: string; class: string; dir: -1 | 0 | 1; strength: number; note: string }>
+  }
 }
 
 export interface TickerRow {
@@ -23,6 +46,14 @@ export interface TickerRow {
   inrPrice: number | null
   inrSource: 'coindcx' | 'derived' | null
   signals: SignalSet | null
+  // ── derivatives analytics (v2) ──
+  lsRatio?: number | null
+  topTraderRatio?: number | null
+  takerRatio?: number | null
+  liqLongUsd?: number
+  liqShortUsd?: number
+  liqCascade?: boolean
+  basisPct?: number | null
 }
 
 export interface LivePosition {
@@ -107,6 +138,11 @@ export interface RiskSnapshot {
   cooldownUntil: Record<string, number>
   haltedReason: string | null
   cooldownSymbols?: Array<{ symbol: string; minutesLeft: number }>
+  // ── v2 risk extensions ──
+  lossStreak?: number
+  winStreak?: number
+  sizingMode?: string
+  trailingStop?: string
 }
 
 export interface LlmDecision {
@@ -115,7 +151,7 @@ export interface LlmDecision {
   candidates: Array<{ symbol: string; action: string; confidence: number; reason: string }>
   executed: string[]
   skipped: string[]
-  source: 'llm' | 'rules-fallback' | string
+  source: 'llm' | 'llm-debate' | 'rules-fallback' | string
   summary: string
 }
 

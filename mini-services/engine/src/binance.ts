@@ -50,8 +50,8 @@ function toCandles(raw: RawKline[], closed: boolean): Candle[] {
  */
 export async function getKlines(
   symbol: string,
-  interval: '5m' | '15m',
-  limit = CONFIG.klinesBootstrap,
+  interval: '5m' | '15m' | '1h',
+  limit: number = CONFIG.klinesBootstrap,
 ): Promise<{ candles: Candle[]; source: 'perp-rest' | 'spot-mirror' }> {
   const qs = `symbol=${symbol}&interval=${interval}&limit=${limit}`
   try {
@@ -85,6 +85,61 @@ export async function getOpenInterestHist(symbol: string, period = '15m', limit 
   }
 }
 
+/** Settled funding-rate history (8h cadence) for regime z-scoring. */
+export async function getFundingRateHistory(symbol: string, limit = 100): Promise<number[]> {
+  try {
+    const raw = await fetchJson<any[]>(
+      `${CONFIG.binanceRestBase}/fapi/v1/fundingRate?symbol=${symbol}&limit=${limit}`,
+      { timeoutMs: 10_000, retries: 2 },
+    )
+    return raw.map((r) => num(r.fundingRate)).filter((v: number) => Number.isFinite(v))
+  } catch {
+    return []
+  }
+}
+
+/** Global accounts long/short ratio (crowd positioning). */
+export async function getGlobalLongShortRatio(symbol: string, period = '15m', limit = 2): Promise<number | null> {
+  try {
+    const raw = await fetchJson<any[]>(
+      `${CONFIG.binanceRestBase}/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=${period}&limit=${limit}`,
+      { timeoutMs: 10_000, retries: 1 },
+    )
+    const last = raw[raw.length - 1]
+    return last ? num(last.longShortRatio) : null
+  } catch {
+    return null
+  }
+}
+
+/** Top-trader position long/short ratio (smart-money proxy). */
+export async function getTopTraderPositionRatio(symbol: string, period = '15m', limit = 2): Promise<number | null> {
+  try {
+    const raw = await fetchJson<any[]>(
+      `${CONFIG.binanceRestBase}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=${period}&limit=${limit}`,
+      { timeoutMs: 10_000, retries: 1 },
+    )
+    const last = raw[raw.length - 1]
+    return last ? num(last.longShortRatio) : null
+  } catch {
+    return null
+  }
+}
+
+/** Taker buy/sell volume ratio (aggressor flow). */
+export async function getTakerLongShortRatio(symbol: string, period = '15m', limit = 2): Promise<number | null> {
+  try {
+    const raw = await fetchJson<any[]>(
+      `${CONFIG.binanceRestBase}/futures/data/takerlongshortRatio?symbol=${symbol}&period=${period}&limit=${limit}`,
+      { timeoutMs: 10_000, retries: 1 },
+    )
+    const last = raw[raw.length - 1]
+    return last ? num(last.buySellRatio) : null
+  } catch {
+    return null
+  }
+}
+
 export async function getExchangeInfoSymbols(): Promise<Set<string>> {
   try {
     const info = await fetchJson<any>(`${CONFIG.binanceRestBase}/fapi/v1/exchangeInfo`, {
@@ -113,8 +168,9 @@ export interface WsState {
 
 export interface WsHandlers {
   onTicker?: (t: { symbol: string; price: number; changePct: number; high: number; low: number; quoteVolume: number }) => void
-  onKline?: (symbol: string, interval: '5m' | '15m', candle: Candle) => void
+  onKline?: (symbol: string, interval: '5m' | '15m' | '1h', candle: Candle) => void
   onMarkPrice?: (m: { symbol: string; mark: number; fundingRate: number; nextFundingMs: number }) => void
+  onLiquidation?: (l: { symbol: string; side: 'LONG' | 'SHORT'; price: number; qty: number; notionalUsd: number; ts: number }) => void
   onStatus?: (connected: boolean) => void
 }
 
@@ -213,7 +269,7 @@ export class BinanceWs {
       })
     } else if (d.e === 'kline') {
       const k = d.k
-      const interval = k.i as '5m' | '15m'
+      const interval = k.i as '5m' | '15m' | '1h'
       this.handlers.onKline?.(d.s, interval, {
         t: num(k.t), o: num(k.o), h: num(k.h), l: num(k.l), c: num(k.c),
         v: num(k.v), q: num(k.q), closed: !!k.x,
@@ -224,6 +280,17 @@ export class BinanceWs {
         mark: num(d.p),
         fundingRate: num(d.r),
         nextFundingMs: num(d.T),
+      })
+    } else if (d.e === 'forceOrder') {
+      // all-market liquidation stream (!forceOrder@arr)
+      const o = d.o
+      this.handlers.onLiquidation?.({
+        symbol: o.s,
+        side: o.S === 'SELL' ? 'LONG' : 'SHORT', // a forced SELL liquidates a long
+        price: num(o.p) || num(o.ap),
+        qty: num(o.q),
+        notionalUsd: num(o.ap) * num(o.q) || num(o.p) * num(o.q),
+        ts: num(o.T) || Date.now(),
       })
     }
   }

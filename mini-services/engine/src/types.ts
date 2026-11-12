@@ -1,7 +1,7 @@
 // ─── Shared types for the crypto intraday trading engine ────────────────────
 
 export type Side = 'LONG' | 'SHORT'
-export type Timeframe = '5m' | '15m'
+export type Timeframe = '5m' | '15m' | '1h'
 
 export interface Candle {
   t: number          // open time (ms)
@@ -28,13 +28,44 @@ export interface TickerRow {
   inrPrice: number | null     // INR reference price
   inrSource: 'coindcx' | 'derived' | null
   signals: SignalSet | null
+  // ── derivatives analytics (v2) ──
+  lsRatio?: number | null            // global long/short account ratio
+  topTraderRatio?: number | null     // top-trader position ratio
+  takerRatio?: number | null         // taker buy/sell volume ratio
+  liqLongUsd?: number                // liquidated long notional (1h window)
+  liqShortUsd?: number               // liquidated short notional (1h window)
+  liqCascade?: boolean
+  basisPct?: number | null           // perp vs spot reference premium %
+}
+
+export interface SignalOut {
+  score: number            // -1..1
+  dir: -1 | 0 | 1
+  note: string
 }
 
 export interface SignalSet {
-  momentum: { score: number; dir: -1 | 0 | 1; note: string }     // 15m EMA cross + volume + OI
-  meanRev: { score: number; dir: -1 | 0 | 1; note: string }       // 5m RSI(2) + BB
-  spread: { score: number; dir: -1 | 0 | 1; note: string }        // cross-exchange / funding
-  composite: number                                              // -1..1
+  momentum: SignalOut       // 15m EMA cross + volume + OI
+  meanRev: SignalOut        // 5m RSI(2) + BB
+  spread: SignalOut         // cross-exchange / funding
+  composite: number         // -1..1
+  // ── extended v2 families (optional — older clients still work) ──
+  liquiditySweep?: SignalOut    // SMC sweep + CHoCH reversal
+  squeezeBreakout?: SignalOut   // TTM squeeze fire + volume
+  orderBlock?: SignalOut        // OB proximity + premium/discount
+  sessionBreakout?: SignalOut   // Asia range break in London/NY
+  fundingFlip?: SignalOut       // healthy trend + neutral funding
+  cascadeSnapback?: SignalOut   // liquidation cascade exhaustion
+  vwapReversion?: SignalOut     // 2σ VWAP stretch fade
+  regime?: { label: string; adx: number; bbWidthPctile: number; note: string }
+  confluence?: {
+    score: number
+    dir: -1 | 0 | 1
+    agreement: number
+    regimeAligned: boolean
+    stacks: Array<{ name: string; dir: -1 | 0 | 1; score: number; notes: string[] }>
+    setups: Array<{ name: string; class: string; dir: -1 | 0 | 1; strength: number; note: string }>
+  }
 }
 
 export interface Position {
@@ -86,7 +117,7 @@ export interface LlmDecision {
   }>
   executed: string[]
   skipped: string[]
-  source: 'llm' | 'rules-fallback'
+  source: 'llm' | 'llm-debate' | 'rules-fallback'
   summary: string
 }
 

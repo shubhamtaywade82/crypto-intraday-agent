@@ -82,6 +82,20 @@ server.tool(
 )
 
 server.tool(
+  'deep_analysis',
+  'Deep single-symbol analysis: all indicator families (RSI/MACD/ADX/SuperTrend/Ichimoku/VWAP/BB/KC/Donchian/squeeze/OBV/MFI/CVD…), market structure (BOS/CHoCH, order blocks, FVGs, liquidity sweeps, premium/discount, sessions), derivatives context (funding regime, OI quadrant, long/short ratios, liquidations, basis), regime tag, five-stack confluence score and the named setups currently firing',
+  {
+    symbol: z.string().describe('Binance USDⓈ-M symbol, e.g. BTCUSDT'),
+  },
+  async ({ symbol }) => ({
+    content: [{
+      type: 'text',
+      text: JSON.stringify(await engineFetch(`/engine/analysis/${encodeURIComponent(symbol)}`), null, 2),
+    }],
+  }),
+)
+
+server.tool(
   'open_positions',
   'Currently open paper positions with live mark price, unrealized PnL and bracket (SL/TP)',
   {},

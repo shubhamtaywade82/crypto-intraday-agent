@@ -288,14 +288,14 @@ New entries blocked until UTC midnight or recovery.`)
 
 export function notifyScanDigest(info: {
   cycle: number
-  source: 'llm' | 'rules-fallback'
+  source: 'llm' | 'llm-debate' | 'rules-fallback'
   candidates: number
   executed: string[]
   skipped: string[]
   summary: string
 }) {
   if (!enabled('scan_digest')) return
-  const head = fmt`📊 ${bold(`Scan cycle #${info.cycle}`)} · ${code(info.source === 'llm' ? 'LLM' : 'RULES')}
+  const head = fmt`📊 ${bold(`Scan cycle #${info.cycle}`)} · ${code(info.source === 'llm' ? 'LLM' : info.source === 'llm-debate' ? 'LLM-DEBATE' : 'RULES')}
 ${bold('Candidates')}: ${code(String(info.candidates))}   ${bold('Executed')}: ${code(info.executed.join(', ') || 'none')}`
   const summary = info.summary && info.summary !== 'no actionable setups'
     ? quote(info.summary)
