@@ -125,7 +125,7 @@ function DecisionCard({ decision }: { decision: LlmDecision }) {
 export function DecisionJournal({ decisions }: { decisions: LlmDecision[] }) {
   const reversed = decisions.slice().reverse()
   return (
-    <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+    <div className="space-y-2 pr-1">
       {reversed.length === 0 ? (
         <p className="py-6 text-center font-mono text-xs text-zinc-600">no AI deliberations recorded yet</p>
       ) : (

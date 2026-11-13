@@ -147,7 +147,7 @@ export function PriceChart({ candles, symbol, tf }: Props) {
   } : null)
 
   return (
-    <div className="relative flex flex-col w-full">
+    <div className="relative flex h-full min-h-0 w-full flex-col">
       {display && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 pb-2 text-[11px] font-mono tabular-nums text-zinc-400">
           <span>O <strong className="font-semibold text-zinc-200">{fmtPrice(display.open)}</strong></span>
@@ -159,7 +159,7 @@ export function PriceChart({ candles, symbol, tf }: Props) {
       )}
       <div
         ref={containerRef}
-        className="h-[340px] w-full sm:h-[400px]"
+        className="min-h-[300px] w-full flex-1"
         role="img"
         aria-label={`${symbol} ${tf} candlestick chart with EMA 9, EMA 21, and volume overlays`}
       />

@@ -69,20 +69,20 @@ function TickerItem({ ticker, selected, hasPosition, onSelect }: RowProps) {
           {isUp ? '+' : ''}{(ticker.changePct * 100).toFixed(2)}%
         </span>
       </TableCell>
-      <TableCell className={`hidden sm:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
+      <TableCell className={`hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
         ticker.fundingRate > 0 ? 'text-zinc-400' : 'text-amber-400 font-semibold'
       }`}>
         {(ticker.fundingRate * 100).toFixed(4)}%
       </TableCell>
-      <TableCell className={`hidden md:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
+      <TableCell className={`hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-xs ${
         oiUp ? 'text-emerald-400/90' : 'text-rose-400/90'
       }`}>
         {ticker.oiChangePct === null ? '—' : `${oiUp ? '+' : ''}${ticker.oiChangePct.toFixed(2)}%`}
       </TableCell>
-      <TableCell className="hidden lg:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
+      <TableCell className="hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
         {ticker.spreadPct === null ? <span className="text-zinc-600">n/a</span> : `${ticker.spreadPct >= 0 ? '+' : ''}${ticker.spreadPct.toFixed(2)}%`}
       </TableCell>
-      <TableCell className="hidden lg:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
+      <TableCell className="hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-xs text-zinc-400">
         {ticker.inrPrice === null ? '—' : `₹${fmtPrice(ticker.inrPrice)}`}
         {ticker.inrSource === 'derived' && <span className="ml-0.5 text-[9px] text-zinc-500" title="Derived via USDT/INR reference rate">*</span>}
       </TableCell>
@@ -102,17 +102,17 @@ interface Props {
 
 export function MarketTable({ rows, selected, onSelect, positionSymbols }: Props) {
   return (
-    <div className="max-h-[420px] overflow-y-auto">
+    <div>
       <Table>
         <TableHeader className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
           <TableRow className="hover:bg-transparent border-zinc-800 text-[11px] uppercase tracking-wider">
             <TableHead className="text-zinc-400 font-medium py-2">Symbol</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium py-2">Price</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium py-2">24h</TableHead>
-            <TableHead className="hidden sm:table-cell text-right text-zinc-400 font-medium py-2">Funding</TableHead>
-            <TableHead className="hidden md:table-cell text-right text-zinc-400 font-medium py-2">OI 15m</TableHead>
-            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium py-2">CDCX Δ</TableHead>
-            <TableHead className="hidden lg:table-cell text-right text-zinc-400 font-medium py-2">INR ref</TableHead>
+            <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">Funding</TableHead>
+            <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">OI 15m</TableHead>
+            <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">CDCX Δ</TableHead>
+            <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">INR ref</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium py-2">Signal</TableHead>
           </TableRow>
         </TableHeader>

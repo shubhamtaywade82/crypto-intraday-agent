@@ -49,8 +49,8 @@ function PositionRow({ p, onClose, isBusy }: { p: LivePosition; onClose: (s: str
         <span className="block text-[10px] text-zinc-500 font-sans">{p.strategy} · conf {(p.confidence * 100).toFixed(0)}%</span>
       </TableCell>
       <TableCell className="py-2.5"><SideBadge side={p.side} /></TableCell>
-      <TableCell className="py-2.5 text-right font-mono tabular-nums text-zinc-300">{fmtNum(p.qty, 4)}</TableCell>
-      <TableCell className="py-2.5 text-right font-mono tabular-nums text-zinc-400">${fmtNum(p.entry)}</TableCell>
+      <TableCell className="hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-zinc-300">{fmtNum(p.qty, 4)}</TableCell>
+      <TableCell className="hidden 2xl:table-cell py-2.5 text-right font-mono tabular-nums text-zinc-400">${fmtNum(p.entry)}</TableCell>
       <TableCell className="py-2.5 text-right font-mono tabular-nums font-semibold text-zinc-100">${fmtNum(p.mark)}</TableCell>
       <TableCell className="py-2.5 text-right font-mono tabular-nums text-xs">
         <span className="text-rose-400">${fmtNum(p.stop)}</span>
@@ -125,14 +125,14 @@ export function PositionsPanel({ account, trades, onClose, busySymbol }: Props) 
       </TabsList>
 
       <TabsContent value="positions" className="mt-3">
-        <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-800/80 bg-zinc-950/40">
+        <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
               <TableRow className="border-zinc-800 text-[11px] uppercase tracking-wider hover:bg-transparent">
                 <TableHead className="text-zinc-400 font-medium py-2">Symbol</TableHead>
                 <TableHead className="text-zinc-400 font-medium py-2">Side</TableHead>
-                <TableHead className="text-right text-zinc-400 font-medium py-2">Size</TableHead>
-                <TableHead className="text-right text-zinc-400 font-medium py-2">Entry</TableHead>
+                <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">Size</TableHead>
+                <TableHead className="hidden 2xl:table-cell text-right text-zinc-400 font-medium py-2">Entry</TableHead>
                 <TableHead className="text-right text-zinc-400 font-medium py-2">Mark</TableHead>
                 <TableHead className="text-right text-zinc-400 font-medium py-2">SL / TP</TableHead>
                 <TableHead className="text-right text-zinc-400 font-medium py-2">PnL</TableHead>
@@ -157,7 +157,7 @@ export function PositionsPanel({ account, trades, onClose, busySymbol }: Props) 
       </TabsContent>
 
       <TabsContent value="history" className="mt-3">
-        <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-800/80 bg-zinc-950/40">
+        <div className="rounded-md border border-zinc-800/80 bg-zinc-950/40">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-zinc-950/95 backdrop-blur border-b border-zinc-800">
               <TableRow className="border-zinc-800 text-[11px] uppercase tracking-wider hover:bg-transparent">
